@@ -1,3 +1,10 @@
+dell-rf (1.0.2-1) unstable; urgency=medium
+
+  * Harden compiler and linker defaults.
+  * Add build attestations and local release signing automation.
+
+ -- Michael Knap <ping@mknap.com>  Tue, 29 Sep 2026 00:23:11 +0100
+
 dell-rf (1.0.1-1) unstable; urgency=medium
 
   * Allow matching Dell Universal Receivers regardless of USB release number.
