@@ -6,11 +6,17 @@ CPPFLAGS ?=
 CFLAGS ?= -O2 -g
 DRF_CPPFLAGS = -Iinclude -DDRF_VERSION=\"$(VERSION)\"
 DRF_CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Werror \
-	-fstack-protector-strong
+	-Wformat=2 -Werror=format-security -fstack-protector-strong \
+	-fstack-clash-protection -fPIE
+TARGET_MACHINE := $(shell $(CC) -dumpmachine)
+ifneq ($(filter x86_64% i386% i486% i586% i686%,$(TARGET_MACHINE)),)
+DRF_CFLAGS += -fcf-protection=full
+endif
 ifeq ($(findstring _FORTIFY_SOURCE,$(CPPFLAGS) $(CFLAGS)),)
-DRF_CPPFLAGS += -D_FORTIFY_SOURCE=2
+DRF_CPPFLAGS += -D_FORTIFY_SOURCE=3
 endif
 LDFLAGS ?=
+DRF_LDFLAGS = -Wl,-z,relro,-z,now,-z,noexecstack -pie
 PREFIX ?= /usr/local
 
 OBJ = build/main.o build/device.o build/protocol.o build/receiver.o \
@@ -18,7 +24,7 @@ OBJ = build/main.o build/device.o build/protocol.o build/receiver.o \
 TEST_OBJ = $(patsubst build/%.o,build/test/%.o,$(OBJ))
 # Linker wrappers in the hardware tests require calls between object files.
 TEST_CFLAGS = $(filter-out -flto%,$(CFLAGS)) $(DRF_CFLAGS) -fno-lto
-TEST_LDFLAGS = $(filter-out -flto%,$(LDFLAGS))
+TEST_LDFLAGS = $(filter-out -flto%,$(LDFLAGS)) $(DRF_LDFLAGS)
 FORMAT_C = $(wildcard src/*.c include/*.h tests/*.c tests/fixtures/*.h)
 FORMAT_PY = $(wildcard tests/*.py)
 
@@ -39,7 +45,8 @@ build/test/%.o: src/%.c VERSION | build/test
 		-MMD -MP -c $< -o $@
 
 build/dell-rf: $(OBJ)
-	$(CC) $(CFLAGS) $(DRF_CFLAGS) $(OBJ) $(LDFLAGS) -o $@
+	$(CC) $(CFLAGS) $(DRF_CFLAGS) $(OBJ) $(LDFLAGS) $(DRF_LDFLAGS) \
+		-o $@
 
 build/test_protocol: tests/test_protocol.c tests/fixtures/4503_queries.h \
                     build/test/protocol.o include/dell_rf_protocol.h | build
