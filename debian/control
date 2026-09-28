@@ -1,0 +1,17 @@
+Source: dell-rf
+Section: utils
+Priority: optional
+Maintainer: Michael Knap <ping@mknap.com>
+Build-Depends: debhelper-compat (= 13), linux-libc-dev, python3
+Standards-Version: 4.7.4
+Rules-Requires-Root: no
+Homepage: https://github.com/michaelknap/dell-rf
+Vcs-Git: https://github.com/michaelknap/dell-rf.git
+Vcs-Browser: https://github.com/michaelknap/dell-rf
+
+Package: dell-rf
+Architecture: linux-any
+Depends: ${shlibs:Depends}, ${misc:Depends}, udev
+Description: pair and unpair Dell wireless mice and keyboards
+ Manage paired devices on a validated Dell Universal USB receiver from Linux.
+ Pairing and removal require confirmation and verify the resulting slot state.

@@ -1,0 +1,32 @@
+# Maintainer: Michael Knap <ping@mknap.com>
+pkgname=dell-rf
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc='Pair and unpair Dell wireless mice and keyboards'
+arch=('x86_64')
+url='https://github.com/michaelknap/dell-rf'
+license=('MIT')
+depends=('glibc' 'udev')
+checkdepends=('python')
+options=('!debug')
+source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
+sha256sums=('@SOURCE_SHA256@')
+
+build() {
+    cd "$pkgname-$pkgver"
+    make
+}
+
+check() {
+    cd "$pkgname-$pkgver"
+    make check
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    make DESTDIR="$pkgdir" PREFIX=/usr install
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 docs/PROTOCOL-4503.md \
+        "$pkgdir/usr/share/doc/$pkgname/PROTOCOL-4503.md"
+}

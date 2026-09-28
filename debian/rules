@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	$(MAKE) PREFIX=/usr DESTDIR=debian/dell-rf install-bin
+
+override_dh_installudev:
+	dh_installudev --priority=70

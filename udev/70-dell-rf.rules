@@ -1,0 +1,3 @@
+# Dell Universal Receiver. Install only after reviewing your local access policy.
+# Grants the active local seat access through uaccess; no world-writable hidraw nodes.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="413c", ATTRS{idProduct}=="4503", TAG+="uaccess"

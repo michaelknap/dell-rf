@@ -1,0 +1,6 @@
+dell-rf (1.0.0-1) unstable; urgency=medium
+
+  * Initial release with confirmed pairing and removal for the validated
+    Dell Universal Receiver, MS3121W mouse and KB3121W keyboard.
+
+ -- Michael Knap <ping@mknap.com>  Mon, 28 Sep 2026 17:40:40 +0000
