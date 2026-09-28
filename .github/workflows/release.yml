@@ -16,6 +16,11 @@ concurrency:
 jobs:
   debian:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     outputs:
       version: ${{ steps.version.outputs.version }}
       epoch: ${{ steps.version.outputs.epoch }}
@@ -41,6 +46,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends build-essential debhelper python3
       - name: Build Debian package and source archive
         run: make pkg-deb
+      - name: Attest Debian package and source archive
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            dist/dell-rf-*.tar.gz
+            dist/dell-rf_*.deb
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-source
@@ -58,6 +69,11 @@ jobs:
     needs: debian
     runs-on: ubuntu-latest
     container: archlinux:base-devel
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     env:
       SOURCE_DATE_EPOCH: ${{ needs.debian.outputs.epoch }}
     steps:
@@ -78,6 +94,12 @@ jobs:
           chown -R builder:builder /build/dell-rf
           runuser -u builder -- bash -c 'cd /build/dell-rf && bash packaging/build-arch.sh'
           cp /build/dell-rf/dist/*.pkg.tar.zst /build/dell-rf/dist/*-aur.tar.gz dist/
+      - name: Attest Arch package and AUR files
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.pkg.tar.zst
+            dist/*-aur.tar.gz
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-arch
@@ -102,12 +124,17 @@ jobs:
           pattern: release-*
           merge-multiple: true
           path: dist
-      - name: Create draft release
+      - name: Create checksums
         shell: bash
         run: |
           cd dist
           assets=(dell-rf-*.tar.gz dell-rf-*.pkg.tar.zst dell-rf_*.deb)
           sha256sum "${assets[@]}" > SHA256SUMS
+      - name: Create draft release
+        shell: bash
+        run: |
+          cd dist
+          assets=(dell-rf-*.tar.gz dell-rf-*.pkg.tar.zst dell-rf_*.deb)
           gh release create "$RELEASE_TAG" "${assets[@]}" SHA256SUMS \
             --verify-tag --draft --title "dell-rf ${RELEASE_TAG#v}" \
             --notes 'Linux packages for x86_64/amd64. Debian 12+ and Ubuntu 22.04+. See the README for tested hardware and usage.'
