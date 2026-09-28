@@ -4,7 +4,7 @@
 #include <linux/input.h>
 #include <string.h>
 
-/* Management-interface descriptor for 413c:4503, USB release 0244. */
+/* Management-interface descriptor observed on 413c:4503 releases 0240/0244. */
 static const uint8_t management_descriptor[] = {
     0x06, 0x00, 0xff, 0x09, 0x00, 0xa1, 0x01, 0x85, 0x01, 0x09, 0x00, 0x15,
     0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x1f, 0x82, 0x02, 0x01, 0xc0,
@@ -283,7 +283,7 @@ int drf_query_device_matches(const struct drf_device *device,
                              const uint8_t *descriptor, size_t length) {
     return device && descriptor && device->bus == BUS_USB &&
            device->vid == DELL_VID && device->pid == DELL_PID_UNIVERSAL_4503 &&
-           device->interface_number == 2 && device->usb_release == 0x0244 &&
+           device->interface_number == 2 &&
            length == sizeof(management_descriptor) &&
            memcmp(descriptor, management_descriptor, length) == 0;
 }

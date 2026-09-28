@@ -1,9 +1,12 @@
 # Receiver protocol
 
 These notes describe the protocol reverse-engineered from USB captures of Dell
-Peripheral Manager. The supported receiver is `413c:4503`, USB release `0244`,
-using HID interface 2. The program checks its report descriptor before sending
-commands.
+Peripheral Manager on a `413c:4503` receiver using HID interface 2. The program
+checks its report descriptor before sending commands. USB release does not
+restrict access.
+
+Slot queries, pairing and removal have been tested on releases `0240` and
+`0244`; other revisions remain unverified.
 
 ## Transport and commands
 

@@ -479,7 +479,7 @@ static void test_guard_and_transport(void) {
     memset(&original, 0x55, sizeof(original));
     snapshot = original;
 
-    for (unsigned int failure = 0; failure < 6; failure++) {
+    for (unsigned int failure = 0; failure < 5; failure++) {
         reset();
         switch (failure) {
         case 0:
@@ -495,9 +495,6 @@ static void test_guard_and_transport(void) {
             mock.device.interface_number = 1;
             break;
         case 4:
-            mock.device.usb_release = 0x0245;
-            break;
-        case 5:
             mock.bad_descriptor = 1;
             break;
         }
@@ -533,13 +530,18 @@ static void test_guard_and_transport(void) {
     assert(mock.writes == 1 && mock.reads == 1 && mock.closes == 1);
     assert(memcmp(&snapshot, &original, sizeof(snapshot)) == 0);
 
-    for (size_t i = 0; i < sizeof(fixture_states) / sizeof(fixture_states[0]);
-         i++) {
-        reset();
-        mock.state = &fixture_states[i];
-        assert(drf_receiver_slots("/dev/hidraw2", &snapshot) == 0);
-        assert(snapshot.paired_count == mock.state->count);
-        assert(mock.writes == 9 && mock.reads == 9 && mock.closes == 1);
+    const int revisions[] = {0x0240, 0x0244, 0x0245, -1};
+    for (size_t revision = 0;
+         revision < sizeof(revisions) / sizeof(revisions[0]); revision++) {
+        for (size_t i = 0;
+             i < sizeof(fixture_states) / sizeof(fixture_states[0]); i++) {
+            reset();
+            mock.device.usb_release = revisions[revision];
+            mock.state = &fixture_states[i];
+            assert(drf_receiver_slots("/dev/hidraw2", &snapshot) == 0);
+            assert(snapshot.paired_count == mock.state->count);
+            assert(mock.writes == 9 && mock.reads == 9 && mock.closes == 1);
+        }
     }
 }
 
@@ -586,6 +588,7 @@ static void test_native_actions_and_guards(void) {
 
     for (unsigned int lost_ack = 0; lost_ack < 2; lost_ack++) {
         reset();
+        mock.device.usb_release = 0x0240;
         mock.action = DRF_ACTION_UNPAIR;
         mock.kind = DRF_SLOT_MOUSE;
         mock.after = &fixture_states[1];
@@ -598,6 +601,7 @@ static void test_native_actions_and_guards(void) {
         for (enum drf_slot_kind kind = DRF_SLOT_KEYBOARD;
              kind <= DRF_SLOT_MOUSE; kind++) {
             reset();
+            mock.device.usb_release = 0x0240;
             mock.action = DRF_ACTION_PAIR;
             mock.kind = kind;
             mock.state = &fixture_states[kind == DRF_SLOT_MOUSE ? 2 : 3];

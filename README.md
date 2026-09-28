@@ -10,7 +10,7 @@ complete with telemetry and assorted other baggage.
 
 ## Tested hardware
 
-- Dell Universal Receiver: USB `413c:4503`, release `0244`.
+- Dell Universal Receiver: USB `413c:4503`, releases `0240` and `0244`.
 - MS3121W mouse.
 - KB3121W keyboard.
 
@@ -23,15 +23,15 @@ Other models and receiver revisions are unverified.
 ### Arch Linux
 
 ```sh
-curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.0.0/dell-rf-1.0.0-1-x86_64.pkg.tar.zst &&
-sudo pacman -U ./dell-rf-1.0.0-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.0.1/dell-rf-1.0.1-1-x86_64.pkg.tar.zst &&
+sudo pacman -U ./dell-rf-1.0.1-1-x86_64.pkg.tar.zst
 ```
 
 ### Debian / Ubuntu
 
 ```sh
-curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.0.0/dell-rf_1.0.0-1_amd64.deb &&
-sudo apt install ./dell-rf_1.0.0-1_amd64.deb
+curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.0.1/dell-rf_1.0.1-1_amd64.deb &&
+sudo apt install ./dell-rf_1.0.1-1_amd64.deb
 ```
 
 Packages are for x86_64/amd64, with Debian 12+ and Ubuntu 22.04+ supported.

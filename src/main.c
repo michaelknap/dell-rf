@@ -60,10 +60,10 @@ static int cmd_info(const char *path) {
         return 1;
     }
 
-    int supported = drf_query_device_matches(&d, descriptor, length);
+    int queryable = drf_query_device_matches(&d, descriptor, length);
     printf("Path:       %s\n", path);
     printf("USB/HID:    %04x:%04x\n", d.vid, d.pid);
-    printf("Supported:  %s\n", supported ? "yes" : "no");
+    printf("Queryable:  %s\n", queryable ? "yes" : "no");
     printf("Family:     %s\n", drf_is_supported_id(d.vid, d.pid)
                                    ? drf_product_label(d.pid)
                                    : "Unknown HID");
@@ -76,7 +76,7 @@ static int cmd_info(const char *path) {
     if (d.usb_release >= 0)
         printf("USB release: %04x\n", (unsigned int)d.usb_release);
 
-    return supported ? 0 : 3;
+    return queryable ? 0 : 3;
 }
 
 static int cmd_descriptor(const char *path) {
@@ -164,10 +164,9 @@ static int print_receiver_path(void *context, const char *path) {
 static int receiver_error(const char *command, const char *path, int r) {
     switch (-r) {
     case ENODEV:
-        fprintf(stderr, "No accessible receiver matching the captured 4503 "
-                        "management interface.\n"
-                        "Return the receiver from the VM and check hidraw "
-                        "permissions.\n");
+        fprintf(stderr, "No accessible 4503 management interface found.\n"
+                        "Check the HID interface, permissions and VM "
+                        "passthrough.\n");
         break;
     case EEXIST: {
         fprintf(stderr, "Multiple validated receivers found; specify "
@@ -181,10 +180,10 @@ static int receiver_error(const char *command, const char *path, int r) {
         break;
     }
     case EOPNOTSUPP:
-        fprintf(stderr, "Refusing commands: receiver identity or interface "
-                        "fingerprint does not match.\n"
-                        "Validated profile: USB 413c:4503, release 0244, "
-                        "interface 2, captured descriptor.\n");
+        fprintf(stderr, "Receiver identity or management descriptor does "
+                        "not match.\n"
+                        "Required: USB 413c:4503, interface 2, matching "
+                        "descriptor.\n");
         break;
     case EACCES:
         fprintf(stderr,

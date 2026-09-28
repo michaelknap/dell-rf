@@ -138,11 +138,6 @@ static void test_fingerprint(void) {
         !drf_query_device_matches(&device, fixture_management_descriptor, 47));
 
     device.interface_number = 2;
-    device.usb_release = 0x0245;
-    assert(
-        !drf_query_device_matches(&device, fixture_management_descriptor, 47));
-
-    device.usb_release = 0x0244;
     assert(
         !drf_query_device_matches(&device, fixture_management_descriptor, 46));
 

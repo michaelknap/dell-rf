@@ -83,6 +83,8 @@ int drf_decode_candidate(const uint8_t *report, size_t length,
 int drf_decode_pair_status(const uint8_t *report, size_t length,
                            struct drf_slot *out);
 
+/* Queries require the management fingerprint, without a revision restriction.
+ */
 int drf_query_device_matches(const struct drf_device *device,
                              const uint8_t *descriptor, size_t length);
 
