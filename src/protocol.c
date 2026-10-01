@@ -239,9 +239,9 @@ int drf_decode_candidate(const uint8_t *report, size_t length,
         return -EBADMSG;
     if (report[1] != 0x01)
         return -ENOMSG;
+    /* Byte 3 varies by peripheral and is not used in the selection request. */
     if ((report[2] != DRF_SLOT_MOUSE && report[2] != DRF_SLOT_KEYBOARD) ||
-        report[3] != 0x04 || !valid_id(report + 14) ||
-        !filled_with(report + 17, 15, 0))
+        !valid_id(report + 14) || !filled_with(report + 17, 15, 0))
         return -EBADMSG;
 
     struct drf_slot decoded = {.kind = (enum drf_slot_kind)report[2]};
@@ -263,9 +263,10 @@ int drf_decode_pair_status(const uint8_t *report, size_t length,
         return r;
     if (report[2] == 0xff && filled_with(report + 3, 29, 0))
         return -EAGAIN;
+    /* Byte 5 carries the same opaque, per-device attribute as discovery. */
     if (report[2] != 0x01 || report[3] < 1 || report[3] > DRF_SLOT_COUNT ||
         (report[4] != DRF_SLOT_MOUSE && report[4] != DRF_SLOT_KEYBOARD) ||
-        report[5] != 0x04 || !valid_id(report + 6))
+        !valid_id(report + 6))
         return -EBADMSG;
 
     struct drf_slot decoded = {.number = report[3],

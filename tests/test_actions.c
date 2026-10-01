@@ -74,6 +74,14 @@ static void test_action_codec(void) {
     assert(device.kind == DRF_SLOT_KEYBOARD && device.number == 0);
     assert(strcmp(device.model, "KB3121W") == 0);
 
+    assert(drf_decode_candidate(fixture_candidate_kb7221w, 32, &device) == 0);
+    assert(device.kind == DRF_SLOT_KEYBOARD && device.number == 0);
+    assert(strcmp(device.model, "KB7221W") == 0);
+
+    assert(drf_decode_candidate(fixture_candidate_ms5320w, 32, &device) == 0);
+    assert(device.kind == DRF_SLOT_MOUSE && device.number == 0);
+    assert(strcmp(device.model, "MS5320W") == 0);
+
     assert(drf_decode_pair_status(fixture_paired_mouse.response, 32, &device) ==
            0);
     assert(device.number == 1 && device.kind == DRF_SLOT_MOUSE);
@@ -87,7 +95,7 @@ static void test_action_codec(void) {
            -EAGAIN);
     assert(memcmp(&device, &original, sizeof(device)) == 0);
 
-    for (unsigned int failure = 0; failure < 8; failure++) {
+    for (unsigned int failure = 0; failure < 7; failure++) {
         memcpy(report, fixture_candidate_mouse, 32);
         switch (failure) {
         case 0:
@@ -97,27 +105,35 @@ static void test_action_codec(void) {
             report[2] = 0x03;
             break;
         case 2:
-            report[3] = 0x05;
-            break;
-        case 3:
             report[4] = 0x1b;
             break;
-        case 4:
+        case 3:
             report[13] = 'X';
             break;
-        case 5:
+        case 4:
             memset(report + 14, 0, 3);
             break;
-        case 6:
+        case 5:
             memset(report + 14, 0xff, 3);
             break;
-        case 7:
+        case 6:
             report[31] = 1;
             break;
         }
 
         assert(drf_decode_candidate(report, 32, &device) == -EBADMSG);
         assert(memcmp(&device, &original, sizeof(device)) == 0);
+    }
+
+    const uint8_t opaque_values[] = {0x00, 0x01, 0x04, 0x07, 0xff};
+    for (size_t i = 0; i < sizeof(opaque_values); i++) {
+        memcpy(report, fixture_candidate_mouse, 32);
+        report[3] = opaque_values[i];
+        assert(drf_decode_candidate(report, 32, &device) == 0);
+
+        memcpy(report, fixture_paired_mouse.response, 32);
+        report[5] = opaque_values[i];
+        assert(drf_decode_pair_status(report, 32, &device) == 0);
     }
 
     memcpy(report, fixture_candidate_mouse, 32);

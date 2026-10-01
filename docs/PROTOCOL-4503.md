@@ -38,7 +38,7 @@ Offsets include the report ID and start at zero.
 | 0-1 | `08 03` |
 | 2 | Slot number |
 | 3 | Kind: `01` keyboard, `02` mouse |
-| 4 | Observed value `04` |
+| 4 | Opaque per-device value; observed `04` |
 | 5-7 | Three-byte peripheral identifier |
 | 8-27 | Zero-padded ASCII model name |
 | 28-31 | Unassigned bytes |
@@ -51,13 +51,16 @@ unassigned bytes at 2-5 and the receiver name at 6-29.
 ## Pairing
 
 Discovery arrives on interrupt endpoint `83` as input report `01`, subtype `01`.
-The device kind is at offset 2, `04` at 3, the ASCII model at 4-13, and its
-three-byte identifier at 14-16. Remaining bytes are zero. The identifier is read
-from the device and copied into the selection request.
+The device kind is at offset 2, an opaque per-device value is at 3, the ASCII
+model is at 4-13, and its three-byte identifier is at 14-16. The opaque value
+has been observed as `01`, `04`, and `07`; it is not interpreted or validated.
+Remaining bytes are zero. The identifier is read from the device and copied
+into the selection request.
 
 Completion replies use `08 05 ff` while pending. An `08 05 01` reply contains the
-slot at 3, kind at 4, `04` at 5, identifier at 6-8, and model at 9-28. The last
-three bytes are unassigned. Polling runs roughly once per second.
+slot at 3, kind at 4, the same opaque per-device value at 5, identifier at 6-8,
+and model at 9-28. The last three bytes are unassigned. Polling runs roughly
+once per second.
 
 Pairing and removal require confirmation and a fresh slot check. After a single
 change request, the program verifies the expected change and remaining devices.
