@@ -3,27 +3,38 @@
 A Linux command-line tool for pairing Dell wireless mice and keyboards through
 a Dell Universal USB receiver.
 
-This is an independent, unofficial project and is not affiliated with, endorsed
-by, or supported by Dell Technologies. Dell Technologies, Dell, and other
-trademarks are trademarks of Dell Inc. or its subsidiaries.
+> [!NOTE]
+> This is an **independent, unofficial project** and is not affiliated with,
+> endorsed by, or supported by Dell Technologies. Dell Technologies, Dell, and
+> other trademarks are trademarks of Dell Inc. or its subsidiaries.
 
 This project was prompted by the regrettable necessity of booting Windows (once
 too often) to repair a corrupted pairing, and by the discovery that basic
 receiver management apparently warrants an entire ~700 MB Windows application,
 complete with telemetry and assorted other baggage.
 
-## Tested hardware
+## Hardware compatibility
 
-- Dell Universal Receiver: USB `413c:4503`, releases `0240` and `0244`.
-- MS3121W mouse.
-- KB3121W keyboard.
+Other peripherals and `413c:4503` receiver revisions may work but are unverified; please [report compatibility results](https://github.com/michaelknap/dell-rf/issues/new).
 
-Successful pairing has also been reported for KB700 (`KB7221W` over the
-receiver) and MS5320W peripherals in [issue #1](https://github.com/michaelknap/dell-rf/issues/1).
+### Receivers
 
-Other models and receiver revisions are unverified.
+| Receiver | USB ID | Release |
+| --- | --- | --- |
+| Dell Universal Receiver | `413c:4503` | `0240` |
+| Dell Universal Receiver | `413c:4503` | `0244` |
 
-[Protocol notes](docs/PROTOCOL-4503.md) describe reverse-engineered notes.
+### Peripherals
+
+| Peripheral | Type | Model reported by receiver |
+| --- | --- | --- |
+| Dell MS3121W | Mouse | `MS3121W` |
+| Dell KB3121W | Keyboard | `KB3121W` |
+| Dell KB700 | Keyboard | `KB7221W` <sup>[#1](https://github.com/michaelknap/dell-rf/issues/1)</sup> |
+| Dell MS5320W | Mouse | `MS5320W` <sup>[#1](https://github.com/michaelknap/dell-rf/issues/1)</sup> |
+
+[Protocol notes](docs/PROTOCOL-4503.md) describe the reverse-engineered
+receiver protocol.
 
 ## Install
 
