@@ -3,6 +3,10 @@
 A Linux command-line tool for pairing Dell wireless mice and keyboards through
 a Dell Universal USB receiver.
 
+This is an independent, unofficial project and is not affiliated with, endorsed
+by, or supported by Dell Technologies. Dell Technologies, Dell, and other
+trademarks are trademarks of Dell Inc. or its subsidiaries.
+
 This project was prompted by the regrettable necessity of booting Windows (once
 too often) to repair a corrupted pairing, and by the discovery that basic
 receiver management apparently warrants an entire ~700 MB Windows application,
