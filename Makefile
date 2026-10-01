@@ -49,23 +49,27 @@ build/dell-rf: $(OBJ)
 		-o $@
 
 build/test_protocol: tests/test_protocol.c tests/fixtures/4503_queries.h \
-                    build/test/protocol.o include/dell_rf_protocol.h | build
+                    build/test/protocol.o build/test/device.o \
+                    include/dell_rf_protocol.h | build
 	$(CC) $(CPPFLAGS) $(DRF_CPPFLAGS) $(TEST_CFLAGS) \
-		tests/test_protocol.c build/test/protocol.o $(TEST_LDFLAGS) -o $@
+		tests/test_protocol.c build/test/protocol.o build/test/device.o \
+		$(TEST_LDFLAGS) -o $@
 
 build/test_actions: tests/test_actions.c tests/fixtures/4503_actions.h \
                     tests/fixtures/4503_queries.h build/test/actions.o \
-                    build/test/protocol.o include/dell_rf_actions.h | build
+                    build/test/protocol.o build/test/device.o \
+                    include/dell_rf_actions.h | build
 	$(CC) $(CPPFLAGS) $(DRF_CPPFLAGS) $(TEST_CFLAGS) \
 		tests/test_actions.c build/test/actions.o build/test/protocol.o \
-		$(TEST_LDFLAGS) -o $@
+		build/test/device.o $(TEST_LDFLAGS) -o $@
 
 build/test_pair: tests/test_pair.c tests/fixtures/4503_actions.h \
                  tests/fixtures/4503_queries.h build/test/actions.o \
-                 build/test/protocol.o include/dell_rf_actions.h | build
+                 build/test/protocol.o build/test/device.o \
+                 include/dell_rf_actions.h | build
 	$(CC) $(CPPFLAGS) $(DRF_CPPFLAGS) $(TEST_CFLAGS) \
 		tests/test_pair.c build/test/actions.o build/test/protocol.o \
-		$(TEST_LDFLAGS) -o $@
+		build/test/device.o $(TEST_LDFLAGS) -o $@
 
 build/dell-rf-cli-test: tests/cli_mock.c tests/fixtures/4503_actions.h \
                        tests/fixtures/4503_queries.h $(TEST_OBJ) | build
@@ -77,11 +81,13 @@ build/dell-rf-cli-test: tests/cli_mock.c tests/fixtures/4503_actions.h \
 
 build/test_receiver: tests/test_receiver.c tests/fixtures/4503_queries.h \
                      tests/fixtures/4503_actions.h \
-                     build/test/receiver.o build/test/protocol.o build/test/actions.o \
+                     build/test/receiver.o build/test/protocol.o \
+                     build/test/actions.o build/test/device.o \
                      include/dell_rf_protocol.h | build
 	$(CC) $(CPPFLAGS) $(DRF_CPPFLAGS) $(TEST_CFLAGS) \
 		tests/test_receiver.c \
-		build/test/receiver.o build/test/protocol.o build/test/actions.o $(TEST_LDFLAGS) \
+		build/test/receiver.o build/test/protocol.o build/test/actions.o \
+		build/test/device.o $(TEST_LDFLAGS) \
 		-Wl,--wrap=open,--wrap=close,--wrap=flock,--wrap=ioctl \
 		-Wl,--wrap=glob,--wrap=globfree,--wrap=drf_probe_fd \
 		-Wl,--wrap=drf_read_descriptor_fd,--wrap=poll,--wrap=read \

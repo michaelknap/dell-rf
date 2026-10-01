@@ -24,6 +24,10 @@ Other peripherals and `413c:4503` receiver revisions may work but are unverified
 | Dell Universal Receiver | `413c:4503` | `0240` |
 | Dell Universal Receiver | `413c:4503` | `0244` |
 
+USB `413c:301d` is recognised as an unverified Dell Universal Receiver. The
+tool still requires its interface number and complete management HID descriptor
+to match the validated `4503` receiver before sending any report.
+
 ### Peripherals
 
 | Peripheral | Type | Model reported by receiver |

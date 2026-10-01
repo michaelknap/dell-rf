@@ -283,7 +283,7 @@ int drf_decode_pair_status(const uint8_t *report, size_t length,
 int drf_query_device_matches(const struct drf_device *device,
                              const uint8_t *descriptor, size_t length) {
     return device && descriptor && device->bus == BUS_USB &&
-           device->vid == DELL_VID && device->pid == DELL_PID_UNIVERSAL_4503 &&
+           drf_is_supported_id(device->vid, device->pid) &&
            device->interface_number == 2 &&
            length == sizeof(management_descriptor) &&
            memcmp(descriptor, management_descriptor, length) == 0;

@@ -106,11 +106,22 @@ static void test_invalid_reports(void) {
 }
 
 static void test_fingerprint(void) {
+    assert(drf_is_supported_id(DELL_VID, DELL_PID_UNIVERSAL_301D));
+    assert(drf_is_supported_id(DELL_VID, DELL_PID_UNIVERSAL_4503));
+    assert(!drf_is_supported_id(DELL_VID, 0x301c));
+    assert(!drf_is_supported_id(0x046d, DELL_PID_UNIVERSAL_301D));
+    assert(strcmp(drf_product_label(DELL_PID_UNIVERSAL_301D),
+                  "Dell Universal Receiver (301d, unverified)") == 0);
+
     struct drf_device device = {.bus = BUS_USB,
                                 .vid = DELL_VID,
                                 .pid = DELL_PID_UNIVERSAL_4503,
                                 .interface_number = 2,
                                 .usb_release = 0x0244};
+    assert(
+        drf_query_device_matches(&device, fixture_management_descriptor, 47));
+
+    device.pid = DELL_PID_UNIVERSAL_301D;
     assert(
         drf_query_device_matches(&device, fixture_management_descriptor, 47));
 
@@ -122,7 +133,7 @@ static void test_fingerprint(void) {
     assert(
         !drf_query_device_matches(&device, fixture_management_descriptor, 47));
 
-    device.pid = DELL_PID_UNIVERSAL_4503;
+    device.pid = DELL_PID_UNIVERSAL_301D;
     device.bus = BUS_BLUETOOTH;
     assert(
         !drf_query_device_matches(&device, fixture_management_descriptor, 47));

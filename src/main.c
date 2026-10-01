@@ -35,7 +35,7 @@ static void usage(FILE *f) {
                "  pair mouse|keyboard [hidraw]\n"
                "                           Discover and confirm one device\n"
                "  slots [hidraw]           List paired devices on a validated "
-               "4503 receiver\n"
+               "receiver\n"
                "  unpair <slot> [hidraw]   Confirm removal of one paired "
                "device (slots 1-6)\n");
 }
@@ -164,7 +164,8 @@ static int print_receiver_path(void *context, const char *path) {
 static int receiver_error(const char *command, const char *path, int r) {
     switch (-r) {
     case ENODEV:
-        fprintf(stderr, "No accessible 4503 management interface found.\n"
+        fprintf(stderr, "No accessible compatible management interface "
+                        "found.\n"
                         "Check the HID interface, permissions and VM "
                         "passthrough.\n");
         break;
@@ -182,8 +183,8 @@ static int receiver_error(const char *command, const char *path, int r) {
     case EOPNOTSUPP:
         fprintf(stderr, "Receiver identity or management descriptor does "
                         "not match.\n"
-                        "Required: USB 413c:4503, interface 2, matching "
-                        "descriptor.\n");
+                        "Required: USB 413c:301d or 413c:4503, interface 2, "
+                        "matching descriptor.\n");
         break;
     case EACCES:
         fprintf(stderr,

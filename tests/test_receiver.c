@@ -543,6 +543,11 @@ static void test_guard_and_transport(void) {
             assert(mock.writes == 9 && mock.reads == 9 && mock.closes == 1);
         }
     }
+
+    reset();
+    mock.device.pid = DELL_PID_UNIVERSAL_301D;
+    assert(drf_receiver_slots("/dev/hidraw2", &snapshot) == 0);
+    assert(mock.writes == 9 && mock.reads == 9 && mock.closes == 1);
 }
 
 static int confirm(void *context, enum drf_action action,
