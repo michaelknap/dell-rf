@@ -26,15 +26,15 @@ Other models and receiver revisions are unverified.
 ### Arch Linux
 
 ```sh
-curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.0.2/dell-rf-1.0.2-1-x86_64.pkg.tar.zst &&
-sudo pacman -U ./dell-rf-1.0.2-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.0.3/dell-rf-1.0.3-1-x86_64.pkg.tar.zst &&
+sudo pacman -U ./dell-rf-1.0.3-1-x86_64.pkg.tar.zst
 ```
 
 ### Debian / Ubuntu
 
 ```sh
-curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.0.2/dell-rf_1.0.2-1_amd64.deb &&
-sudo apt install ./dell-rf_1.0.2-1_amd64.deb
+curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.0.3/dell-rf_1.0.3-1_amd64.deb &&
+sudo apt install ./dell-rf_1.0.3-1_amd64.deb
 ```
 
 Packages are for x86_64/amd64, with Debian 12+ and Ubuntu 22.04+ supported.

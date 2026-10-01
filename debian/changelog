@@ -1,3 +1,11 @@
+dell-rf (1.0.3-1) unstable; urgency=medium
+
+  * Accept the varying peripheral attribute reported by KB700/KB7221W and
+    MS5320W devices during pairing.
+  * Add regression coverage and document the additional compatibility.
+
+ -- Michael Knap <ping@mknap.com>  Thu, 01 Oct 2026 17:16:05 +0100
+
 dell-rf (1.0.2-1) unstable; urgency=medium
 
   * Harden compiler and linker defaults.
