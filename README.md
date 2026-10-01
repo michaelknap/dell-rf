@@ -14,6 +14,9 @@ complete with telemetry and assorted other baggage.
 - MS3121W mouse.
 - KB3121W keyboard.
 
+Successful pairing has also been reported for KB700 (`KB7221W` over the
+receiver) and MS5320W peripherals in [issue #1](https://github.com/michaelknap/dell-rf/issues/1).
+
 Other models and receiver revisions are unverified.
 
 [Protocol notes](docs/PROTOCOL-4503.md) describe reverse-engineered notes.

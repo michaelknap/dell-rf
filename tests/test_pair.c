@@ -27,6 +27,7 @@ struct replay {
     unsigned int pending;
     unsigned int fail_query;
     unsigned int confirmation_delay;
+    uint8_t opaque_attribute;
     int confirmation_error;
     int selection_error;
     int status_error;
@@ -133,6 +134,8 @@ static int exchange(void *context, const uint8_t request[32],
     if (replay->wrong_status_id && request[1] == DRF_PAIR_STATUS &&
         response[2] == 1)
         response[6] ^= 1;
+    if (request[1] == DRF_PAIR_STATUS && response[2] == 1)
+        response[5] = replay->opaque_attribute;
 
     return 0;
 }
@@ -187,6 +190,7 @@ static int receive(void *context, uint8_t report[DRF_REPORT_SIZE + 1],
                                                    : fixture_candidate_mouse;
 
     memcpy(report, candidate, 32);
+    report[3] = replay->opaque_attribute;
     if (replay->unrelated_first && replay->inputs == 0)
         report[1] = 0x07;
     replay->inputs++;
@@ -228,6 +232,7 @@ static struct replay fresh(enum drf_slot_kind kind) {
                            .after =
                                &fixture_states[kind == DRF_SLOT_MOUSE ? 3 : 4],
                            .kind = kind,
+                           .opaque_attribute = 0x04,
                            .pending = kind == DRF_SLOT_MOUSE ? 1 : 3};
 }
 
@@ -259,6 +264,19 @@ static void test_success_and_rejection(void) {
         assert(replay.confirmations == 1 && replay.starts == 1);
         assert(replay.status_polls == (kind == DRF_SLOT_MOUSE ? 2u : 4u));
         assert(replay.queries == 27);
+    }
+
+    const struct {
+        enum drf_slot_kind kind;
+        uint8_t attribute;
+    } variants[] = {{DRF_SLOT_KEYBOARD, 0x07}, {DRF_SLOT_MOUSE, 0x01}};
+
+    for (size_t i = 0; i < sizeof(variants) / sizeof(variants[0]); i++) {
+        struct replay replay = fresh(variants[i].kind);
+        replay.opaque_attribute = variants[i].attribute;
+        assert(run(&replay, 30000, &result) == 0);
+        assert(result.verified && result.change_attempted);
+        assert(replay.selections == 1 && replay.confirmations == 1);
     }
 
     struct replay replay = fresh(DRF_SLOT_MOUSE);
