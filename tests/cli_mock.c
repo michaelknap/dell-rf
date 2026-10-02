@@ -6,16 +6,146 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <linux/input.h>
+#include <poll.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <time.h>
+#include <unistd.h>
 
 /* Linked only into the CLI test executable. Pair/unpair cannot access hardware.
  */
 static const char *scenario(void) {
     const char *value = getenv("DRF_TEST_SCENARIO");
     return value ? value : "";
+}
+
+static unsigned int device_opens;
+static int probed_fd = -1;
+
+int __real_open(const char *path, int flags, ...);
+
+int __wrap_open(const char *path, int flags, ...) {
+    if (strcmp(scenario(), "monitor-single-open") == 0 &&
+        strcmp(path, "/dev/null") == 0)
+        device_opens++;
+
+    return __real_open(path, flags);
+}
+
+int __real_ioctl(int fd, unsigned long request, ...);
+
+int __wrap_ioctl(int fd, unsigned long request, ...) {
+    va_list args;
+    va_start(args, request);
+    void *argument = va_arg(args, void *);
+    va_end(args);
+
+    if (strcmp(scenario(), "monitor-single-open") == 0) {
+        if (request == HIDIOCGRAWINFO) {
+            struct hidraw_devinfo *info = argument;
+            *info = (struct hidraw_devinfo){.bustype = BUS_USB,
+                                            .vendor = DELL_VID,
+                                            .product = DELL_PID_UNIVERSAL_4503};
+            return 0;
+        }
+        if (request == HIDIOCGRDESCSIZE) {
+            *(int *)argument = 1;
+            return 0;
+        }
+        if (request == HIDIOCGRAWNAME(256) || request == HIDIOCGRAWPHYS(256)) {
+            *(char *)argument = '\0';
+            return 0;
+        }
+        assert(0 && "unexpected monitor ioctl");
+    }
+
+    return __real_ioctl(fd, request, argument);
+}
+
+int __real_poll(struct pollfd *fds, nfds_t count, int timeout);
+
+int __wrap_poll(struct pollfd *fds, nfds_t count, int timeout) {
+    if (strcmp(scenario(), "monitor-single-open") == 0) {
+        assert(device_opens == 1);
+        assert(count == 1 && fds[0].fd == probed_fd);
+        errno = EIO;
+        return -1;
+    }
+
+    return __real_poll(fds, count, timeout);
+}
+
+int __real_drf_probe_fd(int fd, struct drf_device *out);
+
+int __wrap_drf_probe_fd(int fd, struct drf_device *out) {
+    if (strcmp(scenario(), "monitor-single-open") == 0) {
+        memset(out, 0, sizeof(*out));
+        out->bus = BUS_USB;
+        out->vid = DELL_VID;
+        out->pid = DELL_PID_UNIVERSAL_4503;
+        probed_fd = fd;
+        return 0;
+    }
+
+    if (strcmp(scenario(), "info-controls") == 0 ||
+        strcmp(scenario(), "info-safe") == 0 ||
+        strcmp(scenario(), "info-utf8") == 0) {
+        memset(out, 0, sizeof(*out));
+        out->bus = BUS_USB;
+        out->vid = DELL_VID;
+        out->pid = DELL_PID_UNIVERSAL_4503;
+        out->interface_number = 2;
+        out->usb_release = 0x0244;
+        out->descriptor_size = 1;
+
+        if (strcmp(scenario(), "info-safe") == 0) {
+            strcpy(out->name, "Dell Universal Receiver");
+            strcpy(out->phys, "usb-0000:00:14.0-1/input2");
+        } else if (strcmp(scenario(), "info-utf8") == 0) {
+            static const unsigned char name[] = {
+                'M', 'a', 'u', 's', 'g', 'e', 'r', 0xc3, 0xa4, 't', 0,
+            };
+            memcpy(out->name, name, sizeof(name));
+            strcpy(out->phys, "usb-0000:00:14.0-1/input2");
+        } else {
+            static const unsigned char name[] = {
+                'D', 'e',  'l',  'l',  0x1b, '[',  '3', '1',
+                'm', '\n', 0x7f, 0xc2, 0x9b, 0xff, 0,
+            };
+            static const unsigned char phys[] = {
+                'u', 's', 'b',  '-', '1',  '\r', 's',  'p', 'o',
+                'o', 'f', 0x1b, ']', '0',  ';',  't',  'i', 't',
+                'l', 'e', 0x07, ' ', 0xe2, 0x80, 0xae, 0,
+            };
+            memcpy(out->name, name, sizeof(name));
+            memcpy(out->phys, phys, sizeof(phys));
+        }
+        return 0;
+    }
+
+    return __real_drf_probe_fd(fd, out);
+}
+
+int __real_drf_read_descriptor_fd(int fd, uint8_t *buf, size_t cap,
+                                  size_t *len);
+
+int __wrap_drf_read_descriptor_fd(int fd, uint8_t *buf, size_t cap,
+                                  size_t *len) {
+    if (strcmp(scenario(), "info-controls") == 0 ||
+        strcmp(scenario(), "info-safe") == 0 ||
+        strcmp(scenario(), "info-utf8") == 0) {
+        assert(fd >= 0 && cap >= 1);
+        buf[0] = 0;
+        *len = 1;
+        return 0;
+    }
+
+    return __real_drf_read_descriptor_fd(fd, buf, cap, len);
 }
 
 int __wrap_drf_find_query_receiver(char *path, size_t capacity) {

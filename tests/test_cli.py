@@ -86,6 +86,49 @@ class CLITests(unittest.TestCase):
         self.addCleanup(terminal.close)
         return terminal
 
+    def run_cli(self, arguments, scenario=""):
+        environment = os.environ.copy()
+        environment["DRF_TEST_SCENARIO"] = scenario
+        return subprocess.run(
+            [str(BINARY), *arguments],
+            capture_output=True,
+            env=environment,
+            start_new_session=True,
+            timeout=3,
+        )
+
+    def test_monitor_uses_single_validated_fd(self):
+        result = self.run_cli(["monitor", "/dev/null"], "monitor-single-open")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(b"Monitoring /dev/null read-only", result.stderr)
+        self.assertIn(b"poll: Input/output error", result.stderr)
+
+    def test_info_escapes_hid_metadata(self):
+        result = self.run_cli(["info", "/dev/null"], "info-controls")
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn(
+            b"Name:       Dell\\x1b[31m\\x0a\\x7f\\xc2\\x9b\\xff\n",
+            result.stdout,
+        )
+        self.assertIn(
+            b"Physical:   usb-1\\x0dspoof\\x1b]0;title\\x07 "
+            b"\\xe2\\x80\\xae\n",
+            result.stdout,
+        )
+        for byte in [b"\x1b", b"\r", b"\x7f", b"\xc2", b"\x9b", b"\xff"]:
+            self.assertNotIn(byte, result.stdout)
+
+    def test_info_preserves_printable_ascii_metadata(self):
+        result = self.run_cli(["info", "/dev/null"], "info-safe")
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn(b"Name:       Dell Universal Receiver\n", result.stdout)
+        self.assertIn(b"Physical:   usb-0000:00:14.0-1/input2\n", result.stdout)
+
+    def test_info_preserves_valid_utf8_metadata(self):
+        result = self.run_cli(["info", "/dev/null"], "info-utf8")
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn(b"Name:       Mausger\xc3\xa4t\n", result.stdout)
+
     def test_confirmed_pairing_for_both_device_types(self):
         for kind, model in [("mouse", "MS3121W"), ("keyboard", "KB3121W")]:
             with self.subTest(kind=kind):

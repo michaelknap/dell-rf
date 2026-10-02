@@ -71,6 +71,8 @@ build/dell-rf-cli-test: tests/cli_mock.c tests/fixtures/4503_actions.h \
                        tests/fixtures/4503_queries.h $(TEST_OBJ) | build
 	$(CC) $(CPPFLAGS) $(DRF_CPPFLAGS) $(TEST_CFLAGS) \
 		tests/cli_mock.c $(TEST_OBJ) $(TEST_LDFLAGS) \
+		-Wl,--wrap=open,--wrap=ioctl,--wrap=poll \
+		-Wl,--wrap=drf_probe_fd,--wrap=drf_read_descriptor_fd \
 		-Wl,--wrap=drf_find_query_receiver,--wrap=drf_list_query_receivers \
 		-Wl,--wrap=drf_receiver_pair \
 		-Wl,--wrap=drf_receiver_unpair,--wrap=drf_receiver_batteries -o $@

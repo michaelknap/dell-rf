@@ -41,6 +41,80 @@ static void usage(FILE *f) {
                "device (slots 1-6)\n");
 }
 
+static int utf8_continuation(unsigned char byte) {
+    return byte >= 0x80 && byte <= 0xbf;
+}
+
+static size_t decode_utf8(const unsigned char *bytes, uint32_t *codepoint) {
+    unsigned char first = bytes[0];
+    if (first >= 0xc2 && first <= 0xdf && utf8_continuation(bytes[1])) {
+        *codepoint = ((uint32_t)(first & 0x1f) << 6) | (bytes[1] & 0x3f);
+        return 2;
+    }
+
+    if (first >= 0xe0 && first <= 0xef && utf8_continuation(bytes[1]) &&
+        utf8_continuation(bytes[2]) && (first != 0xe0 || bytes[1] >= 0xa0) &&
+        (first != 0xed || bytes[1] <= 0x9f)) {
+        *codepoint = ((uint32_t)(first & 0x0f) << 12) |
+                     ((uint32_t)(bytes[1] & 0x3f) << 6) | (bytes[2] & 0x3f);
+        return 3;
+    }
+
+    if (first >= 0xf0 && first <= 0xf4 && utf8_continuation(bytes[1]) &&
+        utf8_continuation(bytes[2]) && utf8_continuation(bytes[3]) &&
+        (first != 0xf0 || bytes[1] >= 0x90) &&
+        (first != 0xf4 || bytes[1] <= 0x8f)) {
+        *codepoint = ((uint32_t)(first & 0x07) << 18) |
+                     ((uint32_t)(bytes[1] & 0x3f) << 12) |
+                     ((uint32_t)(bytes[2] & 0x3f) << 6) | (bytes[3] & 0x3f);
+        return 4;
+    }
+
+    return 0;
+}
+
+static int unicode_output_safe(uint32_t codepoint) {
+    if (codepoint >= 0x80 && codepoint <= 0x9f)
+        return 0;
+    if (codepoint == 0x061c || codepoint == 0x200e || codepoint == 0x200f)
+        return 0;
+    if (codepoint >= 0x2028 && codepoint <= 0x202e)
+        return 0;
+    return codepoint < 0x2066 || codepoint > 0x206f;
+}
+
+static void print_hex_byte(unsigned char byte) {
+    printf("\\x%02x", (unsigned int)byte);
+}
+
+static void print_terminal_string(const char *value) {
+    const unsigned char *bytes = (const unsigned char *)value;
+    for (size_t i = 0; bytes[i];) {
+        if (bytes[i] >= 0x20 && bytes[i] <= 0x7e) {
+            putchar(bytes[i++]);
+            continue;
+        }
+        if (bytes[i] < 0x80) {
+            print_hex_byte(bytes[i++]);
+            continue;
+        }
+
+        uint32_t codepoint = 0;
+        size_t length = decode_utf8(bytes + i, &codepoint);
+        if (!length) {
+            print_hex_byte(bytes[i++]);
+            continue;
+        }
+        if (!unicode_output_safe(codepoint)) {
+            for (size_t j = 0; j < length; j++)
+                print_hex_byte(bytes[i + j]);
+        } else {
+            fwrite(bytes + i, 1, length, stdout);
+        }
+        i += length;
+    }
+}
+
 static int cmd_info(const char *path) {
     int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) {
@@ -69,8 +143,12 @@ static int cmd_info(const char *path) {
                                    ? drf_product_label(d.pid)
                                    : "Unknown HID");
     printf("Bus type:   %u\n", d.bus);
-    printf("Name:       %s\n", d.name[0] ? d.name : "(unknown)");
-    printf("Physical:   %s\n", d.phys[0] ? d.phys : "(unknown)");
+    printf("Name:       ");
+    print_terminal_string(d.name[0] ? d.name : "(unknown)");
+    putchar('\n');
+    printf("Physical:   ");
+    print_terminal_string(d.phys[0] ? d.phys : "(unknown)");
+    putchar('\n');
     printf("Descriptor: %d bytes\n", d.descriptor_size);
     if (d.interface_number >= 0)
         printf("Interface:  %d\n", d.interface_number);
@@ -95,22 +173,24 @@ static int cmd_descriptor(const char *path) {
 }
 
 static int cmd_monitor(const char *path) {
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) {
+        fprintf(stderr, "%s: %s\n", path, strerror(errno));
+        return 1;
+    }
+
     struct drf_device d;
-    int r = drf_probe_path(path, &d);
+    int r = drf_probe_fd(fd, &d);
     if (r) {
+        close(fd);
         fprintf(stderr, "%s: %s\n", path, strerror(-r));
         return 1;
     }
     if (!drf_is_supported_id(d.vid, d.pid)) {
+        close(fd);
         fprintf(stderr, "refusing to monitor unsupported device %04x:%04x\n",
                 d.vid, d.pid);
         return 3;
-    }
-
-    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-    if (fd < 0) {
-        perror(path);
-        return 1;
     }
 
     signal(SIGINT, on_signal);
