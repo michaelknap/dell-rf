@@ -40,9 +40,13 @@ static void test_fixture_queries(void) {
             assert(decoded.number == slot);
             if (decoded.kind == DRF_SLOT_KEYBOARD) {
                 assert(strcmp(decoded.model, "KB3121W") == 0);
+                assert(decoded.capabilities ==
+                       fixture->slot_responses[slot - 1][30]);
                 occupied++;
             } else if (decoded.kind == DRF_SLOT_MOUSE) {
                 assert(strcmp(decoded.model, "MS3121W") == 0);
+                assert(decoded.capabilities ==
+                       fixture->slot_responses[slot - 1][30]);
                 occupied++;
             } else {
                 assert(decoded.kind == DRF_SLOT_EMPTY);
@@ -52,6 +56,51 @@ static void test_fixture_queries(void) {
 
         assert(occupied == fixture->count);
     }
+}
+
+static void test_battery_codec(void) {
+    uint8_t report[DRF_REPORT_SIZE];
+    unsigned int percentage = 1234;
+
+    for (unsigned int slot = 1; slot <= 2; slot++) {
+        assert(drf_encode_query(DRF_QUERY_BATTERY, slot, report) == 0);
+        assert(memcmp(report, fixture_battery_requests[slot - 1],
+                      sizeof(report)) == 0);
+    }
+
+    assert(drf_decode_battery(fixture_battery_responses[0], DRF_REPORT_SIZE, 1,
+                              &percentage) == 0);
+    assert(percentage == 73);
+    assert(drf_decode_battery(fixture_battery_responses[1], DRF_REPORT_SIZE, 2,
+                              &percentage) == 0);
+    assert(percentage == DRF_BATTERY_UNKNOWN);
+
+    memcpy(report, fixture_battery_responses[0], sizeof(report));
+    report[3] = 0;
+    assert(drf_decode_battery(report, sizeof(report), 1, &percentage) == 0);
+    assert(percentage == 0);
+    report[3] = 100;
+    assert(drf_decode_battery(report, sizeof(report), 1, &percentage) == 0);
+    assert(percentage == 100);
+
+    percentage = 1234;
+    assert(drf_decode_battery(report, sizeof(report) - 1, 1, &percentage) ==
+           -EMSGSIZE);
+    report[0] ^= 1;
+    assert(drf_decode_battery(report, sizeof(report), 1, &percentage) ==
+           -EBADMSG);
+    report[0] ^= 1;
+    report[1] = DRF_QUERY_SLOT;
+    assert(drf_decode_battery(report, sizeof(report), 1, &percentage) ==
+           -EBADMSG);
+    report[1] = DRF_QUERY_BATTERY;
+    report[2] = 2;
+    assert(drf_decode_battery(report, sizeof(report), 1, &percentage) ==
+           -EBADMSG);
+    assert(drf_decode_battery(report, sizeof(report), 0, &percentage) ==
+           -EINVAL);
+    assert(drf_decode_battery(report, sizeof(report), 1, NULL) == -EINVAL);
+    assert(percentage == 1234);
 }
 
 static void test_invalid_reports(void) {
@@ -217,13 +266,77 @@ static void test_snapshot(void) {
     assert(memcmp(&snapshot, &original, sizeof(snapshot)) == 0);
 }
 
+struct battery_replay {
+    struct replay snapshot;
+    unsigned int battery_step;
+    int malformed;
+};
+
+static int battery_exchange(void *context,
+                            const uint8_t request[DRF_REPORT_SIZE],
+                            uint8_t response[DRF_REPORT_SIZE], size_t *length) {
+    struct battery_replay *replay = context;
+    if (replay->snapshot.step < 9)
+        return exchange(&replay->snapshot, request, response, length);
+
+    unsigned int step = replay->battery_step++;
+    assert(step < 2);
+    assert(memcmp(request, fixture_battery_requests[step], DRF_REPORT_SIZE) ==
+           0);
+    memcpy(response, fixture_battery_responses[step], DRF_REPORT_SIZE);
+    if (replay->malformed)
+        response[2] = 6;
+    *length = DRF_REPORT_SIZE;
+    return 0;
+}
+
+static void test_battery_snapshot(void) {
+    struct battery_replay replay = {
+        .snapshot = {.fixture = &fixture_states[0]},
+    };
+    struct drf_battery_snapshot result;
+    assert(drf_read_batteries(battery_exchange, &replay, &result) == 0);
+    assert(replay.snapshot.step == 9);
+    assert(replay.battery_step == 2);
+    assert(result.percentages[0] == 73);
+    assert(result.percentages[1] == DRF_BATTERY_UNKNOWN);
+    for (size_t i = 2; i < DRF_SLOT_COUNT; i++)
+        assert(result.percentages[i] == DRF_BATTERY_UNKNOWN);
+
+    struct fixture_state no_mouse_battery = fixture_states[0];
+    no_mouse_battery.slot_responses[1][30] &= (uint8_t)~DRF_CAP_BATTERY;
+    replay = (struct battery_replay){
+        .snapshot = {.fixture = &no_mouse_battery},
+    };
+    assert(drf_read_batteries(battery_exchange, &replay, &result) == 0);
+    assert(replay.battery_step == 1);
+    assert(!(result.snapshot.slots[1].capabilities & DRF_CAP_BATTERY));
+    assert(result.percentages[1] == DRF_BATTERY_UNKNOWN);
+
+    replay = (struct battery_replay){
+        .snapshot = {.fixture = &fixture_states[2]},
+    };
+    assert(drf_read_batteries(battery_exchange, &replay, &result) == 0);
+    assert(replay.battery_step == 0);
+
+    struct drf_battery_snapshot original;
+    memset(&original, 0x55, sizeof(original));
+    result = original;
+    replay = (struct battery_replay){
+        .snapshot = {.fixture = &fixture_states[0]}, .malformed = 1};
+    assert(drf_read_batteries(battery_exchange, &replay, &result) == -EBADMSG);
+    assert(memcmp(&result, &original, sizeof(result)) == 0);
+}
+
 int main(void) {
     test_fixture_queries();
+    test_battery_codec();
     test_invalid_reports();
     test_fingerprint();
     test_snapshot();
+    test_battery_snapshot();
 
-    puts("protocol: five fixture states, malformed reports, identity checks, "
-         "and failures passed");
+    puts("protocol: fixture states, battery reports, malformed reports, "
+         "identity checks, and failures passed");
     return 0;
 }

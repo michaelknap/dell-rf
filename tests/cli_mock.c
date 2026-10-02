@@ -60,6 +60,17 @@ static void snapshot(unsigned int index, struct drf_snapshot *out) {
                                &out->slots[slot - 1]) == 0);
 }
 
+int __wrap_drf_receiver_batteries(const char *path,
+                                  struct drf_battery_snapshot *out) {
+    printf("MOCK_ARGS battery %s\n", path);
+    memset(out, 0, sizeof(*out));
+    snapshot(0, &out->snapshot);
+    for (size_t i = 0; i < DRF_SLOT_COUNT; i++)
+        out->percentages[i] = DRF_BATTERY_UNKNOWN;
+    out->percentages[0] = 73;
+    return 0;
+}
+
 static int approve(enum drf_action action,
                    const struct drf_action_callbacks *callbacks,
                    const struct drf_snapshot *before, uint64_t deadline,

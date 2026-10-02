@@ -73,7 +73,7 @@ build/dell-rf-cli-test: tests/cli_mock.c tests/fixtures/4503_actions.h \
 		tests/cli_mock.c $(TEST_OBJ) $(TEST_LDFLAGS) \
 		-Wl,--wrap=drf_find_query_receiver,--wrap=drf_list_query_receivers \
 		-Wl,--wrap=drf_receiver_pair \
-		-Wl,--wrap=drf_receiver_unpair -o $@
+		-Wl,--wrap=drf_receiver_unpair,--wrap=drf_receiver_batteries -o $@
 
 build/test_receiver: tests/test_receiver.c tests/fixtures/4503_queries.h \
                      tests/fixtures/4503_actions.h \

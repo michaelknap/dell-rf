@@ -29,6 +29,7 @@ static struct {
     unsigned int closes;
     unsigned int writable_opens;
     unsigned int queries;
+    unsigned int battery_queries;
     unsigned int mutations;
     unsigned int confirmations;
     unsigned int status_polls;
@@ -177,6 +178,11 @@ int __wrap_ioctl(int fd, unsigned long operation, ...) {
             mock.reply = fixture->response;
             if (mock.status_polls > 1)
                 mock.state = mock.after;
+        } else if (report[1] == DRF_QUERY_BATTERY) {
+            assert(report[2] >= 1 && report[2] <= 2);
+            expected = fixture_battery_requests[report[2] - 1];
+            mock.reply = fixture_battery_responses[report[2] - 1];
+            mock.battery_queries++;
         } else if (step == 0) {
             expected = fixture_metadata_request;
             mock.reply = fixture_metadata_response;
@@ -543,6 +549,15 @@ static void test_guard_and_transport(void) {
             assert(mock.writes == 9 && mock.reads == 9 && mock.closes == 1);
         }
     }
+
+    reset();
+    struct drf_battery_snapshot batteries;
+    assert(drf_receiver_batteries("/dev/hidraw2", &batteries) == 0);
+    assert(batteries.percentages[0] == 73);
+    assert(batteries.percentages[1] == DRF_BATTERY_UNKNOWN);
+    assert(mock.battery_queries == 2);
+    assert(mock.writes == 11 && mock.reads == 11 && mock.closes == 1);
+    assert(mock.mutations == 0);
 }
 
 static int confirm(void *context, enum drf_action action,

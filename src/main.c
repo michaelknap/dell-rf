@@ -36,6 +36,7 @@ static void usage(FILE *f) {
                "                           Discover and confirm one device\n"
                "  slots [hidraw]           List paired devices on a validated "
                "4503 receiver\n"
+               "  battery [hidraw]         Read paired-device battery levels\n"
                "  unpair <slot> [hidraw]   Confirm removal of one paired "
                "device (slots 1-6)\n");
 }
@@ -231,6 +232,46 @@ static int cmd_slots(const char *path) {
                            : slot->kind == DRF_SLOT_MOUSE  ? "mouse"
                                                            : "empty";
         printf("%u     %-8s  %s\n", slot->number, kind, slot->model);
+    }
+
+    return 0;
+}
+
+static int cmd_battery(const char *path) {
+    char selected[256];
+    struct drf_battery_snapshot result;
+    int r = 0;
+    if (!path) {
+        r = drf_find_query_receiver(selected, sizeof(selected));
+        path = selected;
+    }
+
+    if (!r)
+        r = drf_receiver_batteries(path, &result);
+    if (r)
+        return receiver_error("battery", path, r);
+
+    printf("Receiver: %s (%s)\n", result.snapshot.receiver.name, path);
+    if (!result.snapshot.paired_count) {
+        puts("No paired devices.");
+        return 0;
+    }
+
+    printf("\nSlot  Type      Model                 Battery\n");
+    for (size_t i = 0; i < DRF_SLOT_COUNT; i++) {
+        const struct drf_slot *slot = &result.snapshot.slots[i];
+        if (slot->kind == DRF_SLOT_EMPTY)
+            continue;
+
+        const char *kind =
+            slot->kind == DRF_SLOT_KEYBOARD ? "keyboard" : "mouse";
+        printf("%u     %-8s  %-20s  ", slot->number, kind, slot->model);
+        if (!(slot->capabilities & DRF_CAP_BATTERY))
+            puts("unsupported");
+        else if (result.percentages[i] == DRF_BATTERY_UNKNOWN)
+            puts("unavailable");
+        else
+            printf("%u%%\n", result.percentages[i]);
     }
 
     return 0;
@@ -547,6 +588,9 @@ int main(int argc, char **argv) {
         return cmd_action(argc, argv, DRF_ACTION_PAIR);
     if (!strcmp(argv[1], "slots") && (argc == 2 || argc == 3))
         return cmd_slots(argc == 3 ? argv[2] : NULL);
+    if (!strcmp(argv[1], "battery") &&
+        (argc == 2 || (argc == 3 && argv[2][0] && argv[2][0] != '-')))
+        return cmd_battery(argc == 3 ? argv[2] : NULL);
     if (!strcmp(argv[1], "unpair"))
         return cmd_action(argc, argv, DRF_ACTION_UNPAIR);
 

@@ -63,6 +63,7 @@ int drf_encode_query(enum drf_query query, unsigned int slot,
             return -EINVAL;
         break;
     case DRF_QUERY_SLOT:
+    case DRF_QUERY_BATTERY:
         if (slot < 1 || slot > DRF_SLOT_COUNT)
             return -EINVAL;
         break;
@@ -140,8 +141,24 @@ int drf_decode_slot(const uint8_t *report, size_t length, unsigned int slot,
     r = copy_text(decoded.model, report + 8, DRF_MODEL_SIZE);
     if (r)
         return r;
+    decoded.capabilities = report[30];
 
     *out = decoded;
+    return 0;
+}
+
+int drf_decode_battery(const uint8_t *report, size_t length, unsigned int slot,
+                       unsigned int *out) {
+    if (!out || slot < 1 || slot > DRF_SLOT_COUNT)
+        return -EINVAL;
+
+    int r = check_report(report, length, DRF_QUERY_BATTERY);
+    if (r)
+        return r;
+    if (report[2] != slot)
+        return -EBADMSG;
+
+    *out = report[3] <= 100 ? report[3] : DRF_BATTERY_UNKNOWN;
     return 0;
 }
 
@@ -355,5 +372,39 @@ int drf_read_snapshot(drf_exchange_fn exchange, void *context,
 
     /* Publish only a complete, validated result. */
     *out = snapshot;
+    return 0;
+}
+
+int drf_read_batteries(drf_exchange_fn exchange, void *context,
+                       struct drf_battery_snapshot *out) {
+    if (!exchange || !out)
+        return -EINVAL;
+
+    struct drf_battery_snapshot result = {0};
+    for (size_t i = 0; i < DRF_SLOT_COUNT; i++)
+        result.percentages[i] = DRF_BATTERY_UNKNOWN;
+
+    int r = drf_read_snapshot(exchange, context, &result.snapshot);
+    if (r)
+        return r;
+
+    uint8_t response[DRF_REPORT_SIZE];
+    for (size_t i = 0; i < DRF_SLOT_COUNT; i++) {
+        const struct drf_slot *slot = &result.snapshot.slots[i];
+        if (slot->kind == DRF_SLOT_EMPTY ||
+            !(slot->capabilities & DRF_CAP_BATTERY))
+            continue;
+
+        r = query(exchange, context, DRF_QUERY_BATTERY, slot->number, response);
+        if (r)
+            return r;
+        r = drf_decode_battery(response, sizeof(response), slot->number,
+                               &result.percentages[i]);
+        if (r)
+            return r;
+    }
+
+    /* Publish only a complete, validated result. */
+    *out = result;
     return 0;
 }

@@ -213,6 +213,21 @@ int drf_receiver_slots(const char *path, struct drf_snapshot *out) {
     return r;
 }
 
+int drf_receiver_batteries(const char *path, struct drf_battery_snapshot *out) {
+    if (!path || !out)
+        return -EINVAL;
+
+    struct receiver_session session = {0};
+    int r = open_session(path, &session);
+    if (r)
+        return r;
+
+    r = drf_read_batteries(exchange, &session, out);
+
+    close(session.fd);
+    return r;
+}
+
 int drf_receiver_unpair(const char *path, unsigned int slot,
                         const struct drf_action_callbacks *callbacks,
                         struct drf_action_result *result) {

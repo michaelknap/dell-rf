@@ -6,7 +6,8 @@ checks its report descriptor before sending commands. USB release does not
 restrict access.
 
 Slot queries, pairing and removal have been tested on releases `0240` and
-`0244`; other revisions remain unverified.
+`0244`; other revisions remain unverified. Battery readings have been tested on
+release `0244`.
 
 ## Transport and commands
 
@@ -19,6 +20,7 @@ are padded with zeros. Values below are hexadecimal; slot numbers are 1-6.
 | `08 01` | Receiver information |
 | `08 02` | Paired-device count |
 | `08 03 <slot>` | Read a slot |
+| `08 10 <slot>` | Read the device battery percentage |
 | `08 06 <slot>` | Remove a device |
 | `08 0b` | Begin discovery |
 | `08 08` | Poll discovery |
@@ -41,12 +43,22 @@ Offsets include the report ID and start at zero.
 | 4 | Opaque per-device value; observed `04` |
 | 5-7 | Three-byte peripheral identifier |
 | 8-27 | Zero-padded ASCII model name |
-| 28-31 | Unassigned bytes |
+| 28-29 | Unassigned bytes |
+| 30 | Capability flags; flag `0x10` advertises battery reporting |
+| 31 | Unassigned byte |
 
 With some devices paired, an empty record echoes the slot, has `ff` at offsets
 3-29, and zeros at 30-31. When the receiver is empty, offsets 2-31 are all zero.
 Count replies store the count at offset 2. Receiver information stores four
 unassigned bytes at 2-5 and the receiver name at 6-29.
+
+## Battery reports
+
+A battery request is `08 10 <slot>` followed by zero padding. Its response
+echoes the prefix and slot, with the battery value at offset 3. Dell Peripheral
+Manager treats values from 0 to 100 as percentages and maps every other byte to
+its `-1` sentinel. Its battery getter does not inspect subsequent response
+bytes.
 
 ## Pairing
 

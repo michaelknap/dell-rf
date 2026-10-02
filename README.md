@@ -41,15 +41,15 @@ receiver protocol.
 ### Arch Linux
 
 ```sh
-curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.0.3/dell-rf-1.0.3-1-x86_64.pkg.tar.zst &&
-sudo pacman -U ./dell-rf-1.0.3-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.1.0/dell-rf-1.1.0-1-x86_64.pkg.tar.zst &&
+sudo pacman -U ./dell-rf-1.1.0-1-x86_64.pkg.tar.zst
 ```
 
 ### Debian / Ubuntu
 
 ```sh
-curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.0.3/dell-rf_1.0.3-1_amd64.deb &&
-sudo apt install ./dell-rf_1.0.3-1_amd64.deb
+curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.1.0/dell-rf_1.1.0-1_amd64.deb &&
+sudo apt install ./dell-rf_1.1.0-1_amd64.deb
 ```
 
 Packages are for x86_64/amd64, with Debian 12+ and Ubuntu 22.04+ supported.
@@ -65,6 +65,15 @@ Keep another input device available when unpairing your mouse or keyboard.
 ```sh
 sudo dell-rf slots
 ```
+
+### Check battery levels
+
+```sh
+sudo dell-rf battery
+```
+
+It reports values from 0 to 100 as percentages, `unavailable` for any other
+value, and `unsupported` when the slot does not advertise battery reporting.
 
 ### Unpair
 
@@ -101,7 +110,8 @@ sudo dell-rf slots
 ```
 
 If several receivers are connected, the command lists their compatible paths.
-Add the path to select one, for example `sudo dell-rf slots /dev/hidraw2`.
+Add the path to select one, for example `sudo dell-rf slots /dev/hidraw2` or
+`sudo dell-rf battery /dev/hidraw2`.
 If an outcome is unverified, check `slots` before making another change.
 
 For all commands:

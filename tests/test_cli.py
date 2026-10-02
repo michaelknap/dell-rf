@@ -147,6 +147,7 @@ class CLITests(unittest.TestCase):
     def test_multiple_receivers_list_paths_before_any_action(self):
         for args in [
             ["slots"],
+            ["battery"],
             ["pair", "mouse"],
             ["pair", "keyboard"],
             ["unpair", "1"],
@@ -161,6 +162,22 @@ class CLITests(unittest.TestCase):
                     self.assertIn(f"  {path}\r\n", output)
                 self.assertNotIn("MOCK_ARGS", output)
                 self.assertNotIn("MOCK_COMMIT", output)
+
+    def test_battery_is_read_only_and_reports_available_values(self):
+        result = subprocess.run(
+            [str(BINARY), "battery"],
+            capture_output=True,
+            text=True,
+            start_new_session=True,
+            timeout=3,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("MOCK_ARGS battery /dev/hidraw-test", result.stdout)
+        self.assertIn("KB3121W", result.stdout)
+        self.assertIn("73%", result.stdout)
+        self.assertIn("MS3121W", result.stdout)
+        self.assertIn("unavailable", result.stdout)
+        self.assertNotIn("MOCK_COMMIT", result.stdout)
 
     def test_explicit_path_bypasses_ambiguous_selection(self):
         for args in [["pair", "mouse"], ["unpair", "1"]]:
@@ -207,6 +224,8 @@ class CLITests(unittest.TestCase):
             ["unpair", "1", "--timeout", "1"],
             ["unpair", "1", "a", "b"],
             ["pair", "mouse", "--timeout", "30"],
+            ["battery", "--yes"],
+            ["battery", "/dev/hidraw2", "extra"],
         ]
         cases += [["unpair", value] for value in ["0", "7", "-1", "", "a"]]
         for args in cases:

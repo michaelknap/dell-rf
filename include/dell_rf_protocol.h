@@ -8,12 +8,15 @@
 #define DRF_SLOT_COUNT 6
 #define DRF_MODEL_SIZE 20
 #define DRF_RECEIVER_NAME_SIZE 24
+#define DRF_CAP_BATTERY 0x10
+#define DRF_BATTERY_UNKNOWN ((unsigned int)-1)
 
-/* Queries established by the 4503 capture. */
+/* Core queries came from 4503 captures; battery came from DPM analysis. */
 enum drf_query {
     DRF_QUERY_RECEIVER = 0x01,
     DRF_QUERY_COUNT = 0x02,
     DRF_QUERY_SLOT = 0x03,
+    DRF_QUERY_BATTERY = 0x10,
 };
 
 enum drf_slot_kind {
@@ -39,12 +42,18 @@ struct drf_slot {
     enum drf_slot_kind kind;
     uint8_t opaque_id[3];
     char model[DRF_MODEL_SIZE + 1];
+    uint8_t capabilities;
 };
 
 struct drf_snapshot {
     struct drf_receiver_metadata receiver;
     unsigned int paired_count;
     struct drf_slot slots[DRF_SLOT_COUNT];
+};
+
+struct drf_battery_snapshot {
+    struct drf_snapshot snapshot;
+    unsigned int percentages[DRF_SLOT_COUNT];
 };
 
 typedef int (*drf_exchange_fn)(void *context,
@@ -64,6 +73,9 @@ int drf_decode_count(const uint8_t *report, size_t length, unsigned int *out);
 
 int drf_decode_slot(const uint8_t *report, size_t length, unsigned int slot,
                     struct drf_slot *out);
+
+int drf_decode_battery(const uint8_t *report, size_t length, unsigned int slot,
+                       unsigned int *out);
 
 int drf_encode_unpair(unsigned int slot, uint8_t report[DRF_REPORT_SIZE]);
 
@@ -91,6 +103,9 @@ int drf_query_device_matches(const struct drf_device *device,
 int drf_read_snapshot(drf_exchange_fn exchange, void *context,
                       struct drf_snapshot *out);
 
+int drf_read_batteries(drf_exchange_fn exchange, void *context,
+                       struct drf_battery_snapshot *out);
+
 /* Enumerate validated interfaces without sending feature reports. The path
  * is borrowed for the callback; return zero to continue or a negative errno
  * to stop. No accessible matches returns -ENODEV. */
@@ -99,5 +114,7 @@ int drf_list_query_receivers(drf_receiver_path_fn visit, void *context);
 int drf_find_query_receiver(char *path, size_t capacity);
 
 int drf_receiver_slots(const char *path, struct drf_snapshot *out);
+
+int drf_receiver_batteries(const char *path, struct drf_battery_snapshot *out);
 
 #endif

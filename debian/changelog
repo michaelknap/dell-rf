@@ -1,3 +1,11 @@
+dell-rf (1.1.0-1) unstable; urgency=medium
+
+  * Add the battery command for paired peripherals that advertise battery
+    reporting.
+  * Document the receiver battery query and capability flag.
+
+ -- Michael Knap <ping@mknap.com>  Fri, 02 Oct 2026 00:59:34 +0100
+
 dell-rf (1.0.3-1) unstable; urgency=medium
 
   * Accept the varying peripheral attribute reported by KB700/KB7221W and
