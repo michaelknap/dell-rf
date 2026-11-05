@@ -32,6 +32,7 @@ Other peripherals and `413c:4503` receiver revisions may work but are unverified
 | Dell KB3121W | Keyboard | `KB3121W` |
 | Dell KB700 | Keyboard | `KB7221W` <sup>[#1](https://github.com/michaelknap/dell-rf/issues/1)</sup> |
 | Dell MS5320W | Mouse | `MS5320W` <sup>[#1](https://github.com/michaelknap/dell-rf/issues/1)</sup> |
+| Dell WM126 | Mouse | `WM126` <sup>[#3](https://github.com/michaelknap/dell-rf/issues/3)</sup> |
 
 [Protocol notes](docs/PROTOCOL-4503.md) describe the reverse-engineered
 receiver protocol.
