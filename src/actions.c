@@ -96,7 +96,8 @@ int drf_unpair(const struct drf_action_io *io, unsigned int slot,
         return -ECANCELED;
 
     struct drf_snapshot before, current, after;
-    int r = drf_read_snapshot(io->exchange, io->context, &before);
+    int r =
+        drf_read_snapshot(io->receiver_pid, io->exchange, io->context, &before);
     if (r)
         return r;
     if ((r = validate_identities(&before)))
@@ -113,7 +114,8 @@ int drf_unpair(const struct drf_action_io *io, unsigned int slot,
     if (cancelled(callbacks))
         return -ECANCELED;
 
-    r = drf_read_snapshot(io->exchange, io->context, &current);
+    r = drf_read_snapshot(io->receiver_pid, io->exchange, io->context,
+                          &current);
     if (r)
         return r;
     if (!same_snapshot(&before, &current))
@@ -140,7 +142,8 @@ int drf_unpair(const struct drf_action_io *io, unsigned int slot,
     if (wait_error && wait_error != -EINTR)
         return r ? r : wait_error;
 
-    int verify_error = drf_read_snapshot(io->exchange, io->context, &after);
+    int verify_error =
+        drf_read_snapshot(io->receiver_pid, io->exchange, io->context, &after);
     if (verify_error)
         return r ? r : verify_error;
     if (!removed_only(&before, &after, &result->device))
@@ -175,6 +178,19 @@ static int check_window(const struct drf_action_io *io,
         return r;
 
     return *now >= deadline ? -ETIMEDOUT : 0;
+}
+
+static int start_window(const struct drf_action_io *io, unsigned int timeout_ms,
+                        uint64_t *deadline) {
+    uint64_t now;
+    int r = io->now_ms(io->context, &now);
+    if (r)
+        return r;
+    if (now > UINT64_MAX - timeout_ms)
+        return -EOVERFLOW;
+
+    *deadline = now + timeout_ms;
+    return 0;
 }
 
 static unsigned int poll_interval(uint64_t remaining) {
@@ -286,7 +302,7 @@ static int verify_pair(const struct drf_action_io *io,
         return r;
 
     struct drf_snapshot after;
-    r = drf_read_snapshot(io->exchange, io->context, &after);
+    r = drf_read_snapshot(io->receiver_pid, io->exchange, io->context, &after);
     if (r)
         return r;
 
@@ -300,24 +316,49 @@ static int verify_pair(const struct drf_action_io *io,
     return 0;
 }
 
+static int wait_for_status_poll(const struct drf_action_io *io,
+                                const struct drf_action_callbacks *callbacks,
+                                uint64_t deadline, int *await_notification) {
+    static const uint8_t completion_301c[DRF_REPORT_SIZE] = {0x01, 0x08, 0x01,
+                                                             0x30};
+    uint64_t now;
+    int r = check_window(io, callbacks, deadline, &now);
+    if (r)
+        return r;
+
+    const uint64_t poll_at = now + poll_interval(deadline - now);
+    do {
+        unsigned int interval = (unsigned int)(poll_at - now);
+        if (*await_notification) {
+            uint8_t input[DRF_REPORT_SIZE + 1];
+            size_t length = sizeof(input);
+            r = io->receive(io->context, input, &length, interval);
+            if (!r && length == sizeof(completion_301c) &&
+                memcmp(input, completion_301c, length) == 0) {
+                *await_notification = 0;
+                return check_window(io, callbacks, deadline, &now);
+            }
+            if (r == -EAGAIN || r == -ETIMEDOUT)
+                r = 0;
+        } else {
+            r = io->wait_ms(io->context, interval);
+        }
+        if (r && r != -EINTR)
+            return r;
+
+        r = check_window(io, callbacks, deadline, &now);
+    } while (!r && now < poll_at);
+    return r;
+}
+
 static int finish_pair(const struct drf_action_io *io,
                        const struct drf_snapshot *before,
                        const struct drf_action_callbacks *callbacks,
                        uint64_t deadline, struct drf_action_result *result) {
+    int await_notification = io->receiver_pid == DELL_PID_UNIVERSAL_301C;
     int r;
     for (;;) {
-        uint64_t now;
-        r = check_window(io, callbacks, deadline, &now);
-        if (r)
-            break;
-
-        r = io->wait_ms(io->context, poll_interval(deadline - now));
-        if (r == -EINTR)
-            continue;
-        if (r)
-            break;
-
-        r = check_window(io, callbacks, deadline, &now);
+        r = wait_for_status_poll(io, callbacks, deadline, &await_notification);
         if (r)
             break;
 
@@ -362,7 +403,8 @@ int drf_pair(const struct drf_action_io *io, enum drf_slot_kind kind,
         return -ECANCELED;
 
     struct drf_snapshot before, current;
-    int r = drf_read_snapshot(io->exchange, io->context, &before);
+    int r =
+        drf_read_snapshot(io->receiver_pid, io->exchange, io->context, &before);
     if (r)
         return r;
     if ((r = validate_identities(&before)))
@@ -387,19 +429,17 @@ int drf_pair(const struct drf_action_io *io, enum drf_slot_kind kind,
             return r;
     }
 
-    uint64_t now;
-    r = io->now_ms(io->context, &now);
+    uint64_t deadline;
+    r = start_window(io, timeout_ms, &deadline);
     if (r)
         return r;
-    if (now > UINT64_MAX - timeout_ms)
-        return -EOVERFLOW;
-    uint64_t deadline = now + timeout_ms;
 
     uint8_t response[DRF_REPORT_SIZE];
     size_t length;
     r = pair_exchange(io, DRF_PAIR_BEGIN, NULL, response, &length);
     if (!r)
-        r = drf_decode_pair_ack(DRF_PAIR_BEGIN, response, length);
+        r = drf_decode_pair_ack_for_pid(DRF_PAIR_BEGIN, io->receiver_pid,
+                                        response, length);
     if (r)
         return r;
     if (callbacks->search_started)
@@ -408,7 +448,12 @@ int drf_pair(const struct drf_action_io *io, enum drf_slot_kind kind,
     r = find_candidate(io, kind, &before, callbacks, deadline, &result->device);
     if (r)
         return r;
+
+    uint64_t now;
     r = check_window(io, callbacks, deadline, &now);
+    if (r)
+        return r;
+    r = start_window(io, timeout_ms, &deadline);
     if (r)
         return r;
 
@@ -420,7 +465,8 @@ int drf_pair(const struct drf_action_io *io, enum drf_slot_kind kind,
     r = check_window(io, callbacks, deadline, &now);
     if (r)
         return r;
-    r = drf_read_snapshot(io->exchange, io->context, &current);
+    r = drf_read_snapshot(io->receiver_pid, io->exchange, io->context,
+                          &current);
     if (r)
         return r;
     if (!same_snapshot(&before, &current))
@@ -433,8 +479,21 @@ int drf_pair(const struct drf_action_io *io, enum drf_slot_kind kind,
     r = pair_exchange(io, DRF_PAIR_SELECT, result->device.opaque_id, response,
                       &length);
     if (!r)
-        r = drf_decode_pair_ack(DRF_PAIR_SELECT, response, length);
+        r = drf_decode_pair_ack_for_pid(DRF_PAIR_SELECT, io->receiver_pid,
+                                        response, length);
+    if (!r && io->receiver_pid == DELL_PID_UNIVERSAL_301C && response[2] == 1 &&
+        memcmp(response + 3, result->device.opaque_id,
+               sizeof(result->device.opaque_id)) != 0)
+        r = -EBADMSG;
     result->acknowledgement_error = r;
+
+    r = start_window(io, timeout_ms, &deadline);
+    if (r) {
+        /* Selection is already a commit point. A clock failure must not skip
+         * the same read-only verification used for status/timeout failures. */
+        int verify_error = verify_pair(io, &before, result);
+        return verify_error ? r : 0;
+    }
 
     return finish_pair(io, &before, callbacks, deadline, result);
 }

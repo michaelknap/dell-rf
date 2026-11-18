@@ -33,6 +33,10 @@ static int filled_with(const uint8_t *data, size_t length, uint8_t value) {
     return 1;
 }
 
+static int valid_id(const uint8_t id[3]) {
+    return id && !filled_with(id, 3, 0) && !filled_with(id, 3, 0xff);
+}
+
 static int copy_text(char *out, const uint8_t *data, size_t length) {
     size_t end = 0;
     while (end < length && data[end]) {
@@ -109,8 +113,8 @@ int drf_decode_count(const uint8_t *report, size_t length, unsigned int *out) {
     return 0;
 }
 
-int drf_decode_slot(const uint8_t *report, size_t length, unsigned int slot,
-                    struct drf_slot *out) {
+int drf_decode_slot(uint16_t pid, const uint8_t *report, size_t length,
+                    unsigned int slot, struct drf_slot *out) {
     if (!out || slot < 1 || slot > DRF_SLOT_COUNT)
         return -EINVAL;
     int r = check_report(report, length, DRF_QUERY_SLOT);
@@ -127,13 +131,21 @@ int drf_decode_slot(const uint8_t *report, size_t length, unsigned int slot,
 
     if (report[2] != slot)
         return -EBADMSG;
+
+    /* The 301c can retain model data in an empty slot after removal. */
+    if (pid == DELL_PID_UNIVERSAL_301C && filled_with(report + 3, 5, 0) &&
+        report[30] == 0 && report[31] == 0) {
+        *out = decoded;
+        return 0;
+    }
     if (filled_with(report + 3, 27, 0xff) && report[30] == 0 &&
         report[31] == 0) {
         *out = decoded;
         return 0;
     }
 
-    if (report[3] != DRF_SLOT_KEYBOARD && report[3] != DRF_SLOT_MOUSE)
+    if ((report[3] != DRF_SLOT_KEYBOARD && report[3] != DRF_SLOT_MOUSE) ||
+        (pid == DELL_PID_UNIVERSAL_301C && !valid_id(report + 5)))
         return -EBADMSG;
 
     decoded.kind = (enum drf_slot_kind)report[3];
@@ -181,10 +193,6 @@ int drf_decode_unpair_ack(const uint8_t *report, size_t length) {
     return filled_with(report + 2, 30, 0) ? 0 : -EBADMSG;
 }
 
-static int valid_id(const uint8_t id[3]) {
-    return id && !filled_with(id, 3, 0) && !filled_with(id, 3, 0xff);
-}
-
 int drf_encode_pair_command(enum drf_pair_command command,
                             const uint8_t opaque_id[3],
                             uint8_t report[DRF_REPORT_SIZE]) {
@@ -218,12 +226,13 @@ int drf_encode_pair_command(enum drf_pair_command command,
     return 0;
 }
 
-int drf_decode_pair_ack(enum drf_pair_command command, const uint8_t *report,
-                        size_t length) {
+int drf_decode_pair_ack_for_pid(enum drf_pair_command command, uint16_t pid,
+                                const uint8_t *report, size_t length) {
     unsigned int response_command;
     switch (command) {
     case DRF_PAIR_BEGIN:
-        response_command = 0x00;
+        response_command =
+            pid == DELL_PID_UNIVERSAL_301C ? DRF_PAIR_BEGIN : 0x00;
         break;
     case DRF_PAIR_DISCOVERY_STATUS:
     case DRF_PAIR_SELECT:
@@ -236,6 +245,15 @@ int drf_decode_pair_ack(enum drf_pair_command command, const uint8_t *report,
     int r = check_report(report, length, response_command);
     if (r)
         return r;
+
+    /* The 301c echoes the selection, including the selected device ID. The
+     * transaction layer separately checks that it is the requested ID. */
+    if (command == DRF_PAIR_SELECT && pid == DELL_PID_UNIVERSAL_301C)
+        return report[2] == 1 && valid_id(report + 3) &&
+                       filled_with(report + 6, 26, 0)
+                   ? 0
+                   : -EBADMSG;
+
     if (!filled_with(report + 3, 29, 0))
         return -EBADMSG;
 
@@ -244,6 +262,12 @@ int drf_decode_pair_ack(enum drf_pair_command command, const uint8_t *report,
     if (command == DRF_PAIR_BEGIN)
         return report[2] == 0 ? 0 : -EBADMSG;
     return report[2] <= 1 ? 0 : -EBADMSG;
+}
+
+int drf_decode_pair_ack(enum drf_pair_command command, const uint8_t *report,
+                        size_t length) {
+    return drf_decode_pair_ack_for_pid(command, DELL_PID_UNIVERSAL_4503, report,
+                                       length);
 }
 
 int drf_decode_candidate(const uint8_t *report, size_t length,
@@ -299,11 +323,28 @@ int drf_decode_pair_status(const uint8_t *report, size_t length,
 
 int drf_query_device_matches(const struct drf_device *device,
                              const uint8_t *descriptor, size_t length) {
-    return device && descriptor && device->bus == BUS_USB &&
-           device->vid == DELL_VID && device->pid == DELL_PID_UNIVERSAL_4503 &&
-           device->interface_number == 2 &&
-           length == sizeof(management_descriptor) &&
-           memcmp(descriptor, management_descriptor, length) == 0;
+    static const uint8_t extension_301c[] = {
+        0x06, 0x00, 0xff, 0x09, 0x05, 0xa1, 0x01, 0x85, 0x04,
+        0x19, 0x00, 0x2a, 0xff, 0x00, 0x15, 0x00, 0x26, 0xff,
+        0x00, 0x75, 0x08, 0x95, 0x1f, 0xb1, 0x02, 0xc0};
+
+    if (!device || !descriptor || device->bus != BUS_USB ||
+        device->vid != DELL_VID || device->interface_number != 2)
+        return 0;
+
+    if (device->pid == DELL_PID_UNIVERSAL_4503)
+        return length == sizeof(management_descriptor) &&
+               memcmp(descriptor, management_descriptor, length) == 0;
+
+    if (device->pid == DELL_PID_UNIVERSAL_301C)
+        return length ==
+                   sizeof(management_descriptor) + sizeof(extension_301c) &&
+               memcmp(descriptor, management_descriptor,
+                      sizeof(management_descriptor)) == 0 &&
+               memcmp(descriptor + sizeof(management_descriptor),
+                      extension_301c, sizeof(extension_301c)) == 0;
+
+    return 0;
 }
 
 static int query(drf_exchange_fn exchange, void *context,
@@ -323,7 +364,7 @@ static int query(drf_exchange_fn exchange, void *context,
     return check_report(response, length, command);
 }
 
-int drf_read_snapshot(drf_exchange_fn exchange, void *context,
+int drf_read_snapshot(uint16_t pid, drf_exchange_fn exchange, void *context,
                       struct drf_snapshot *out) {
     if (!exchange || !out)
         return -EINVAL;
@@ -352,7 +393,7 @@ int drf_read_snapshot(drf_exchange_fn exchange, void *context,
         if (snapshot.paired_count && response[2] == 0)
             return -EAGAIN;
 
-        r = drf_decode_slot(response, sizeof(response), slot,
+        r = drf_decode_slot(pid, response, sizeof(response), slot,
                             &snapshot.slots[slot - 1]);
         if (r)
             return r;
@@ -375,7 +416,7 @@ int drf_read_snapshot(drf_exchange_fn exchange, void *context,
     return 0;
 }
 
-int drf_read_batteries(drf_exchange_fn exchange, void *context,
+int drf_read_batteries(uint16_t pid, drf_exchange_fn exchange, void *context,
                        struct drf_battery_snapshot *out) {
     if (!exchange || !out)
         return -EINVAL;
@@ -384,7 +425,7 @@ int drf_read_batteries(drf_exchange_fn exchange, void *context,
     for (size_t i = 0; i < DRF_SLOT_COUNT; i++)
         result.percentages[i] = DRF_BATTERY_UNKNOWN;
 
-    int r = drf_read_snapshot(exchange, context, &result.snapshot);
+    int r = drf_read_snapshot(pid, exchange, context, &result.snapshot);
     if (r)
         return r;
 

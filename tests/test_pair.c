@@ -25,6 +25,8 @@ struct replay {
     unsigned int drains;
 
     unsigned int pending;
+    unsigned int candidate_after_ms;
+    unsigned int delivery_delay_ms;
     unsigned int fail_query;
     unsigned int confirmation_delay;
     uint8_t opaque_attribute;
@@ -47,6 +49,7 @@ struct replay {
     int wrong_status_id;
     int bad_begin;
     int clock_error;
+    int clock_error_after_selection;
     int endless_drain;
 };
 
@@ -142,7 +145,8 @@ static int exchange(void *context, const uint8_t request[32],
 
 static int now_ms(void *context, uint64_t *now) {
     struct replay *replay = context;
-    if (replay->clock_error)
+    if (replay->clock_error &&
+        (!replay->clock_error_after_selection || replay->selections))
         return replay->clock_error;
 
     *now = replay->now;
@@ -179,8 +183,9 @@ static int receive(void *context, uint8_t report[DRF_REPORT_SIZE + 1],
         replay->stopped = 1;
         return -EINTR;
     }
-    if (replay->no_candidate || replay->now < 2000)
+    if (replay->no_candidate || replay->now < replay->candidate_after_ms)
         return -ETIMEDOUT;
+    replay->now += replay->delivery_delay_ms;
 
     const uint8_t *candidate = replay->kind == DRF_SLOT_MOUSE
                                    ? fixture_candidate_mouse
@@ -232,6 +237,7 @@ static struct replay fresh(enum drf_slot_kind kind) {
                            .after =
                                &fixture_states[kind == DRF_SLOT_MOUSE ? 3 : 4],
                            .kind = kind,
+                           .candidate_after_ms = 2000,
                            .opaque_attribute = 0x04,
                            .pending = kind == DRF_SLOT_MOUSE ? 1 : 3};
 }
@@ -239,6 +245,7 @@ static struct replay fresh(enum drf_slot_kind kind) {
 static int run(struct replay *replay, unsigned int timeout,
                struct drf_action_result *result) {
     struct drf_action_io io = {.context = replay,
+                               .receiver_pid = DELL_PID_UNIVERSAL_4503,
                                .exchange = exchange,
                                .wait_ms = wait_ms,
                                .now_ms = now_ms,
@@ -349,6 +356,21 @@ static void test_deadlines_and_signals(void) {
     assert(replay.now == 17 && replay.selections == 0);
 
     replay = fresh(DRF_SLOT_MOUSE);
+    replay.candidate_after_ms = 6000;
+    replay.confirmation_delay = 6000;
+    assert(run(&replay, 6001, &result) == 0);
+    assert(result.verified && replay.selections == 1);
+
+    for (unsigned int delay = 0; delay <= 1; delay++) {
+        replay = fresh(DRF_SLOT_MOUSE);
+        replay.candidate_after_ms = 6000;
+        replay.delivery_delay_ms = delay;
+        assert(run(&replay, 6000, &result) == -ETIMEDOUT);
+        assert(replay.now == 6000 + delay);
+        assert(replay.confirmations == 0 && replay.selections == 0);
+    }
+
+    replay = fresh(DRF_SLOT_MOUSE);
     replay.stopped = 1;
     assert(run(&replay, 30000, &result) == -ECANCELED);
     assert(replay.queries == 0 && replay.begins == 0);
@@ -441,6 +463,19 @@ static void test_transport_failures(void) {
     replay.clock_error = -EIO;
     assert(run(&replay, 30000, &result) == -EIO);
     assert(replay.begins == 0);
+
+    replay = fresh(DRF_SLOT_MOUSE);
+    replay.clock_error = -EIO;
+    replay.clock_error_after_selection = 1;
+    assert(run(&replay, 30000, &result) == 0);
+    assert(result.change_attempted && result.verified);
+
+    replay = fresh(DRF_SLOT_MOUSE);
+    replay.after = replay.before;
+    replay.clock_error = -EIO;
+    replay.clock_error_after_selection = 1;
+    assert(run(&replay, 30000, &result) == -EIO);
+    assert(result.change_attempted && !result.verified);
 
     replay = fresh(DRF_SLOT_MOUSE);
     replay.endless_drain = 1;

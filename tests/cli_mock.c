@@ -186,7 +186,8 @@ static void snapshot(unsigned int index, struct drf_snapshot *out) {
 
     out->paired_count = state->count;
     for (unsigned int slot = 1; slot <= DRF_SLOT_COUNT; slot++)
-        assert(drf_decode_slot(state->slot_responses[slot - 1], 32, slot,
+        assert(drf_decode_slot(DELL_PID_UNIVERSAL_4503,
+                               state->slot_responses[slot - 1], 32, slot,
                                &out->slots[slot - 1]) == 0);
 }
 

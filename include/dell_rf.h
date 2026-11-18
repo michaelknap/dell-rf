@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #define DELL_VID 0x413c
+#define DELL_PID_UNIVERSAL_301C 0x301c
 #define DELL_PID_UNIVERSAL_4503 0x4503
 #define DELL_RF_MAX_DESC 4096
 

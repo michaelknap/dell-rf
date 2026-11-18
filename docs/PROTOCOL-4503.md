@@ -1,13 +1,12 @@
 # Receiver protocol
 
-These notes describe the protocol reverse-engineered from USB captures of Dell
-Peripheral Manager on a `413c:4503` receiver using HID interface 2. The program
-checks its report descriptor before sending commands. USB release does not
-restrict access.
+The original USB captures used Dell Peripheral Manager and a `413c:4503`
+receiver. Both receivers use HID interface 2. Each USB product ID has its own
+expected report descriptor. USB release does not restrict access.
 
-Slot queries, pairing and removal have been tested on releases `0240` and
-`0244`; other revisions remain unverified. Battery readings have been tested on
-release `0244`.
+Slot queries, pairing and removal were tested on `4503` releases `0240` and
+`0244` and on `301c` release `0244`. Battery readings were tested on release
+`0244` of both receivers.
 
 ## Transport and commands
 
@@ -27,9 +26,11 @@ are padded with zeros. Values below are hexadecimal; slot numbers are 1-6.
 | `08 04 01 <identifier[3]>` | Select a discovered device |
 | `08 05` | Poll pairing completion |
 
-Query replies echo the command. Discovery begins with an `08 00` reply.
-Discovery and selection acknowledgements use `00` or `01`; their meaning is
-unassigned. Removal acknowledges with `08 06` and zero padding.
+Query replies echo the command. Discovery starts with an `08 00` reply on
+the `4503` and `08 0b` on the `301c`, both zero-padded. Discovery and
+selection acknowledgements on the `4503` use `00` or `01`. Their meaning is
+unknown. The `301c` echoes the selection request, including the peripheral ID.
+Removal acknowledges with `08 06` and zero padding.
 
 ## Slot records
 
@@ -47,10 +48,13 @@ Offsets include the report ID and start at zero.
 | 30 | Capability flags; flag `0x10` advertises battery reporting |
 | 31 | Unassigned byte |
 
-With some devices paired, an empty record echoes the slot, has `ff` at offsets
-3-29, and zeros at 30-31. When the receiver is empty, offsets 2-31 are all zero.
+On the `4503`, an empty record echoes the slot, has `ff` at offsets 3-29, and
+zeros at 30-31. When the receiver is empty, offsets 2-31 are all zero.
 Count replies store the count at offset 2. Receiver information stores four
 unassigned bytes at 2-5 and the receiver name at 6-29.
+
+An empty `301c` slot echoes its slot number. After removal, bytes 8-29 can
+retain old model data while bytes 3-7 and 30-31 are zero.
 
 ## Battery reports
 
@@ -72,7 +76,9 @@ into the selection request.
 Completion replies use `08 05 ff` while pending. An `08 05 01` reply contains the
 slot at 3, kind at 4, the same opaque per-device value at 5, identifier at 6-8,
 and model at 9-28. The last three bytes are unassigned. Polling runs roughly
-once per second.
+once per second. In the `301c` MS5320W capture, endpoint `83` returned
+`01 08 01 30` with zero padding before status showed completion. This report
+triggers an early status poll.
 
 Pairing and removal require confirmation and a fresh slot check. After a single
 change request, the program verifies the expected change and remaining devices.

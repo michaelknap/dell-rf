@@ -1,4 +1,5 @@
 #include "dell_rf_actions.h"
+#include "fixtures/301c_queries.h"
 #include "fixtures/4503_actions.h"
 #include "fixtures/4503_queries.h"
 
@@ -155,6 +156,29 @@ static void test_action_codec(void) {
     memcpy(report, fixture_pair_begin.response, 32);
     report[1] = 0x0b;
     assert(drf_decode_pair_ack(DRF_PAIR_BEGIN, report, 32) == -EBADMSG);
+    assert(drf_decode_pair_ack_for_pid(DRF_PAIR_BEGIN, DELL_PID_UNIVERSAL_301C,
+                                       fixture_301c_pair_begin_ack, 32) == 0);
+    assert(drf_decode_pair_ack_for_pid(DRF_PAIR_BEGIN, DELL_PID_UNIVERSAL_4503,
+                                       fixture_301c_pair_begin_ack,
+                                       32) == -EBADMSG);
+    assert(drf_decode_pair_ack_for_pid(DRF_PAIR_BEGIN, DELL_PID_UNIVERSAL_301C,
+                                       fixture_pair_begin.response,
+                                       32) == -EBADMSG);
+    assert(drf_decode_pair_ack_for_pid(DRF_PAIR_SELECT, DELL_PID_UNIVERSAL_301C,
+                                       fixture_301c_select_ms5320w_ack,
+                                       32) == 0);
+    assert(drf_decode_pair_ack_for_pid(DRF_PAIR_SELECT, DELL_PID_UNIVERSAL_4503,
+                                       fixture_301c_select_ms5320w_ack,
+                                       32) == -EBADMSG);
+
+    assert(drf_decode_pair_status(fixture_301c_paired_ms5320w_status, 32,
+                                  &device) == 0);
+    assert(device.number == 1 && device.kind == DRF_SLOT_MOUSE);
+    assert(strcmp(device.model, "MS5320W") == 0);
+    const uint8_t captured_id[3] = {0x2e, 0x84, 0xfa};
+    assert(memcmp(device.opaque_id, captured_id, sizeof(captured_id)) == 0);
+    assert(drf_decode_candidate(fixture_301c_pair_completion_input, 32,
+                                &device) == -ENOMSG);
 }
 
 struct replay {
@@ -257,8 +281,10 @@ static struct replay fresh(void) {
 }
 
 static int run(struct replay *replay, struct drf_action_result *result) {
-    struct drf_action_io io = {
-        .context = replay, .exchange = exchange, .wait_ms = wait_ms};
+    struct drf_action_io io = {.context = replay,
+                               .receiver_pid = DELL_PID_UNIVERSAL_4503,
+                               .exchange = exchange,
+                               .wait_ms = wait_ms};
     struct drf_action_callbacks callbacks = {
         .context = replay, .confirm = confirm, .cancelled = is_cancelled};
 

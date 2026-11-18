@@ -15,11 +15,12 @@
 
 struct receiver_session {
     int fd;
+    uint16_t pid;
     enum drf_action action;
     unsigned int removal_slot;
 };
 
-static int validate_interface(int fd) {
+static int validate_interface(int fd, uint16_t *pid) {
     struct drf_device device;
     int r = drf_probe_fd(fd, &device);
     if (r)
@@ -31,8 +32,11 @@ static int validate_interface(int fd) {
     if (r)
         return r;
 
-    return drf_query_device_matches(&device, descriptor, length) ? 0
-                                                                 : -EOPNOTSUPP;
+    if (!drf_query_device_matches(&device, descriptor, length))
+        return -EOPNOTSUPP;
+    if (pid)
+        *pid = device.pid;
+    return 0;
 }
 
 int drf_list_query_receivers(drf_receiver_path_fn visit, void *context) {
@@ -52,7 +56,7 @@ int drf_list_query_receivers(drf_receiver_path_fn visit, void *context) {
         if (fd < 0)
             continue;
 
-        int r = validate_interface(fd);
+        int r = validate_interface(fd, NULL);
         close(fd);
         if (r)
             continue;
@@ -188,7 +192,7 @@ static int open_session(const char *path, struct receiver_session *session) {
     if (session->fd < 0)
         return -errno;
 
-    int r = validate_interface(session->fd);
+    int r = validate_interface(session->fd, &session->pid);
     if (!r && flock(session->fd, LOCK_EX | LOCK_NB) < 0)
         r = errno == EWOULDBLOCK ? -EBUSY : -errno;
 
@@ -207,7 +211,7 @@ int drf_receiver_slots(const char *path, struct drf_snapshot *out) {
         return r;
 
     if (!r)
-        r = drf_read_snapshot(exchange, &session, out);
+        r = drf_read_snapshot(session.pid, exchange, &session, out);
 
     close(session.fd);
     return r;
@@ -222,7 +226,7 @@ int drf_receiver_batteries(const char *path, struct drf_battery_snapshot *out) {
     if (r)
         return r;
 
-    r = drf_read_batteries(exchange, &session, out);
+    r = drf_read_batteries(session.pid, exchange, &session, out);
 
     close(session.fd);
     return r;
@@ -245,8 +249,10 @@ int drf_receiver_unpair(const char *path, unsigned int slot,
     if (r)
         return r;
 
-    struct drf_action_io io = {
-        .context = &session, .exchange = exchange, .wait_ms = wait_ms};
+    struct drf_action_io io = {.context = &session,
+                               .receiver_pid = session.pid,
+                               .exchange = exchange,
+                               .wait_ms = wait_ms};
     r = drf_unpair(&io, slot, callbacks, result);
 
     close(session.fd);
@@ -271,6 +277,7 @@ int drf_receiver_pair(const char *path, enum drf_slot_kind kind,
         return r;
 
     struct drf_action_io io = {.context = &session,
+                               .receiver_pid = session.pid,
                                .exchange = exchange,
                                .wait_ms = wait_ms,
                                .now_ms = now_ms,
