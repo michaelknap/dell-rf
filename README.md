@@ -15,8 +15,8 @@ complete with telemetry and assorted other baggage.
 
 ## Hardware compatibility
 
-Other peripherals and receiver revisions may work but are unverified; please
-[report compatibility results](https://github.com/michaelknap/dell-rf/issues/new).
+Other peripherals and receiver revisions may work.
+[Report compatibility results](https://github.com/michaelknap/dell-rf/issues/new).
 
 ### Receivers
 
@@ -24,15 +24,7 @@ Other peripherals and receiver revisions may work but are unverified; please
 | --- | --- | --- |
 | Dell Universal Receiver | `413c:4503` | `0240` |
 | Dell Universal Receiver | `413c:4503` | `0244` |
-| Dell Universal Receiver | `413c:301c` | `0244` <sup>[status](#receiver-301c-status)</sup> |
-
-#### Receiver 301c status
-
-Receiver discovery, metadata and slot queries, and removal have been exercised
-on `413c:301c`, release `0244`. Pairing an MS5320W, including asynchronous
-discovery and completion notifications, final slot readback, persistence after
-receiver reconnect and battery reporting is confirmed. Mouse input was tested
-on Fedora Linux and, after moving the paired receiver, on macOS.
+| Dell Universal Receiver | `413c:301c` | `0244` <sup>[#5](https://github.com/michaelknap/dell-rf/pull/5)</sup> |
 
 ### Peripherals
 
@@ -112,7 +104,8 @@ sudo dell-rf pair keyboard
 
 Turn the device off, hold a button or key, and turn it on. Release the button or
 key when the device appears. Check the device shown, then type `pair` to confirm.
-The pairing window lasts 30 seconds. Unpair an already paired device first.
+Discovery, confirmation and pairing completion each have a 30-second timeout.
+Unpair an already paired device first.
 
 After pairing or unpairing, check the result:
 

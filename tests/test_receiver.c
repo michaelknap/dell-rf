@@ -36,6 +36,10 @@ static struct {
     unsigned int status_polls;
     unsigned int input_reads;
     unsigned int input_polls;
+    unsigned int unrelated_reports;
+    const uint8_t *completion_report;
+    uint64_t selected_at;
+    uint64_t status_times[2];
     unsigned int last_command;
 
     uint64_t time_ms;
@@ -176,12 +180,16 @@ int __wrap_ioctl(int fd, unsigned long operation, ...) {
             expected = fixture->request;
             mock.reply = fixture->response;
             if (mock.device.pid == DELL_PID_UNIVERSAL_301C) {
+                mock.selected_at = mock.time_ms;
                 memcpy(mock.reply_storage, report, DRF_REPORT_SIZE);
                 mock.reply = mock.reply_storage;
             }
             assert(++mock.mutations == 1 && mock.confirmations == 1);
         } else if (report[1] == DRF_PAIR_STATUS) {
             assert(mock.action == DRF_ACTION_PAIR && mock.mutations == 1);
+            assert(mock.status_polls < 2);
+            mock.status_times[mock.status_polls] =
+                mock.time_ms - mock.selected_at;
 
             const struct fixture_action_exchange *fixture =
                 mock.status_polls++ == 0      ? &fixture_pair_pending
@@ -194,7 +202,9 @@ int __wrap_ioctl(int fd, unsigned long operation, ...) {
         } else if (report[1] == DRF_QUERY_BATTERY) {
             assert(report[2] >= 1 && report[2] <= 2);
             expected = fixture_battery_requests[report[2] - 1];
-            mock.reply = fixture_battery_responses[report[2] - 1];
+            mock.reply = mock.device.pid == DELL_PID_UNIVERSAL_301C
+                             ? fixture_301c_ms5320w_battery
+                             : fixture_battery_responses[report[2] - 1];
             mock.battery_queries++;
         } else if (step == 0) {
             expected = fixture_metadata_request;
@@ -235,6 +245,16 @@ int __wrap_ioctl(int fd, unsigned long operation, ...) {
 
 int __wrap_poll(struct pollfd *fds, nfds_t count, int timeout) {
     assert(mock.action && timeout >= 0 && timeout <= 1000);
+    if (count && mock.mutations && mock.device.pid == DELL_PID_UNIVERSAL_301C) {
+        if (mock.unrelated_reports || mock.completion_report) {
+            assert(timeout >= 10);
+            mock.time_ms += 10;
+            fds[0].revents = POLLIN;
+            return 1;
+        }
+        mock.time_ms += (unsigned int)timeout;
+        return 0;
+    }
     mock.time_ms += (unsigned int)timeout;
 
     if (!count) {
@@ -256,11 +276,16 @@ ssize_t __wrap_read(int fd, void *buffer, size_t length) {
     assert(fd == 42 && length == DRF_REPORT_SIZE + 1);
 
     mock.input_reads++;
-    const uint8_t *input =
-        mock.kind == DRF_SLOT_MOUSE ? fixture_candidate_mouse
-                                    : fixture_candidate_keyboard;
-    if (mock.device.pid == DELL_PID_UNIVERSAL_301C && mock.mutations)
-        input = fixture_301c_pair_completion_input;
+    const uint8_t *input = mock.kind == DRF_SLOT_MOUSE
+                               ? fixture_candidate_mouse
+                               : fixture_candidate_keyboard;
+    if (mock.device.pid == DELL_PID_UNIVERSAL_301C && mock.mutations) {
+        if (mock.unrelated_reports)
+            mock.unrelated_reports--;
+        else
+            input = mock.completion_report;
+        assert(input);
+    }
     memcpy(buffer, input, 32);
     return mock.input_short ? 31 : 32;
 }
@@ -273,8 +298,8 @@ int __wrap_clock_gettime(clockid_t clock, struct timespec *out) {
     return 0;
 }
 
-int __real_drf_read_snapshot(drf_exchange_fn exchange, void *context,
-                             struct drf_snapshot *out);
+int __real_drf_read_snapshot(uint16_t pid, drf_exchange_fn exchange,
+                             void *context, struct drf_snapshot *out);
 
 int __real_drf_unpair(const struct drf_action_io *io, unsigned int slot,
                       const struct drf_action_callbacks *callbacks,
@@ -287,8 +312,8 @@ int __real_drf_pair(const struct drf_action_io *io, enum drf_slot_kind kind,
 
 /* Deliberately bypass encoders to prove that each session's transport guard
  * rejects mutations belonging to another operation and malformed padding. */
-int __wrap_drf_read_snapshot(drf_exchange_fn exchange, void *context,
-                             struct drf_snapshot *out) {
+int __wrap_drf_read_snapshot(uint16_t pid, drf_exchange_fn exchange,
+                             void *context, struct drf_snapshot *out) {
     if (mock.guard && !mock.action) {
         uint8_t response[32];
         size_t length = sizeof(response);
@@ -296,7 +321,7 @@ int __wrap_drf_read_snapshot(drf_exchange_fn exchange, void *context,
                         &length);
     }
 
-    return __real_drf_read_snapshot(exchange, context, out);
+    return __real_drf_read_snapshot(pid, exchange, context, out);
 }
 
 static int bad_request(const struct drf_action_io *io, int pairing) {
@@ -567,12 +592,21 @@ static void test_guard_and_transport(void) {
 
     reset();
     mock.device.pid = DELL_PID_UNIVERSAL_301C;
+    struct fixture_state state_301c = fixture_states[3];
+    memcpy(state_301c.slot_responses[0], fixture_301c_occupied_slot,
+           DRF_REPORT_SIZE);
+    memcpy(state_301c.slot_responses[5], fixture_301c_stale_empty_slot,
+           DRF_REPORT_SIZE);
+    mock.state = &state_301c;
     assert(drf_receiver_slots("/dev/hidraw2", &snapshot) == 0);
-    assert(snapshot.paired_count == mock.state->count);
+    assert(snapshot.paired_count == 1 &&
+           strcmp(snapshot.slots[0].model, "MS5320W") == 0);
     assert(mock.writes == 9 && mock.reads == 9 && mock.closes == 1);
+    struct drf_battery_snapshot batteries;
+    assert(drf_receiver_batteries("/dev/hidraw2", &batteries) == 0);
+    assert(mock.battery_queries == 1 && batteries.percentages[0] == 48);
 
     reset();
-    struct drf_battery_snapshot batteries;
     assert(drf_receiver_batteries("/dev/hidraw2", &batteries) == 0);
     assert(batteries.percentages[0] == 73);
     assert(batteries.percentages[1] == DRF_BATTERY_UNKNOWN);
@@ -679,17 +713,34 @@ static void test_native_actions_and_guards(void) {
         assert(mock.closes == 1);
     }
 
-    reset();
-    mock.device.pid = DELL_PID_UNIVERSAL_301C;
-    mock.action = DRF_ACTION_PAIR;
-    mock.kind = DRF_SLOT_MOUSE;
-    mock.state = &fixture_states[2];
-    mock.after = &fixture_states[3];
-    assert(drf_receiver_pair("/dev/hidraw2", DRF_SLOT_MOUSE, 30000,
-                             &callbacks, &result) == 0);
-    assert(result.verified && result.device.kind == DRF_SLOT_MOUSE);
-    assert(mock.mutations == 1 && mock.closes == 1);
-    assert(mock.input_reads >= 2);
+    const struct {
+        unsigned int unrelated_reports;
+        const uint8_t *notification;
+        unsigned int first_poll_ms;
+    } completion_cases[] = {
+        {3, fixture_301c_pair_completion_input, 40},
+        {220, NULL, 1000},
+        {0, NULL, 1000},
+    };
+
+    for (size_t i = 0;
+         i < sizeof(completion_cases) / sizeof(completion_cases[0]); i++) {
+        reset();
+        mock.device.pid = DELL_PID_UNIVERSAL_301C;
+        mock.action = DRF_ACTION_PAIR;
+        mock.kind = DRF_SLOT_MOUSE;
+        mock.state = &fixture_states[2];
+        mock.after = &fixture_states[3];
+        mock.unrelated_reports = completion_cases[i].unrelated_reports;
+        mock.completion_report = completion_cases[i].notification;
+        assert(drf_receiver_pair("/dev/hidraw2", DRF_SLOT_MOUSE, 30000,
+                                 &callbacks, &result) == 0);
+        assert(result.verified && !result.acknowledgement_error);
+        assert(mock.mutations == 1 && mock.closes == 1 &&
+               mock.status_polls == 2);
+        assert(mock.status_times[0] == completion_cases[i].first_poll_ms);
+        assert(mock.status_times[1] == mock.status_times[0] + 1000);
+    }
 }
 
 int main(void) {

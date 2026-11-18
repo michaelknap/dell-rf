@@ -1,4 +1,3 @@
-# Dell Universal Receiver. Install only after reviewing your local access policy.
-# Grants the active local seat access through uaccess; no world-writable hidraw nodes.
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="413c", ATTRS{idProduct}=="4503", TAG+="uaccess"
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="413c", ATTRS{idProduct}=="301c", TAG+="uaccess"
+# The USB device and interface attributes live on different parents.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="413c", ATTRS{idProduct}=="4503|301c", ENV{.DELL_RF_RECEIVER}="1"
+ENV{.DELL_RF_RECEIVER}=="1", ATTRS{bInterfaceNumber}=="02", TAG+="uaccess"

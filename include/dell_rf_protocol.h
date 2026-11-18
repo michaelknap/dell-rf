@@ -71,8 +71,8 @@ int drf_decode_receiver(const uint8_t *report, size_t length,
 
 int drf_decode_count(const uint8_t *report, size_t length, unsigned int *out);
 
-int drf_decode_slot(const uint8_t *report, size_t length, unsigned int slot,
-                    struct drf_slot *out);
+int drf_decode_slot(uint16_t pid, const uint8_t *report, size_t length,
+                    unsigned int slot, struct drf_slot *out);
 
 int drf_decode_battery(const uint8_t *report, size_t length, unsigned int slot,
                        unsigned int *out);
@@ -103,10 +103,10 @@ int drf_decode_pair_status(const uint8_t *report, size_t length,
 int drf_query_device_matches(const struct drf_device *device,
                              const uint8_t *descriptor, size_t length);
 
-int drf_read_snapshot(drf_exchange_fn exchange, void *context,
+int drf_read_snapshot(uint16_t pid, drf_exchange_fn exchange, void *context,
                       struct drf_snapshot *out);
 
-int drf_read_batteries(drf_exchange_fn exchange, void *context,
+int drf_read_batteries(uint16_t pid, drf_exchange_fn exchange, void *context,
                        struct drf_battery_snapshot *out);
 
 /* Enumerate validated interfaces without sending feature reports. The path

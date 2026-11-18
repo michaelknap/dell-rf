@@ -26,6 +26,7 @@ struct replay {
 
     unsigned int pending;
     unsigned int candidate_after_ms;
+    unsigned int delivery_delay_ms;
     unsigned int fail_query;
     unsigned int confirmation_delay;
     uint8_t opaque_attribute;
@@ -184,6 +185,7 @@ static int receive(void *context, uint8_t report[DRF_REPORT_SIZE + 1],
     }
     if (replay->no_candidate || replay->now < replay->candidate_after_ms)
         return -ETIMEDOUT;
+    replay->now += replay->delivery_delay_ms;
 
     const uint8_t *candidate = replay->kind == DRF_SLOT_MOUSE
                                    ? fixture_candidate_mouse
@@ -243,6 +245,7 @@ static struct replay fresh(enum drf_slot_kind kind) {
 static int run(struct replay *replay, unsigned int timeout,
                struct drf_action_result *result) {
     struct drf_action_io io = {.context = replay,
+                               .receiver_pid = DELL_PID_UNIVERSAL_4503,
                                .exchange = exchange,
                                .wait_ms = wait_ms,
                                .now_ms = now_ms,
@@ -354,9 +357,18 @@ static void test_deadlines_and_signals(void) {
 
     replay = fresh(DRF_SLOT_MOUSE);
     replay.candidate_after_ms = 6000;
-    assert(run(&replay, 6000, &result) == 0);
+    replay.confirmation_delay = 6000;
+    assert(run(&replay, 6001, &result) == 0);
     assert(result.verified && replay.selections == 1);
-    assert(replay.now > 6000); /* Completion used its own fresh window. */
+
+    for (unsigned int delay = 0; delay <= 1; delay++) {
+        replay = fresh(DRF_SLOT_MOUSE);
+        replay.candidate_after_ms = 6000;
+        replay.delivery_delay_ms = delay;
+        assert(run(&replay, 6000, &result) == -ETIMEDOUT);
+        assert(replay.now == 6000 + delay);
+        assert(replay.confirmations == 0 && replay.selections == 0);
+    }
 
     replay = fresh(DRF_SLOT_MOUSE);
     replay.stopped = 1;

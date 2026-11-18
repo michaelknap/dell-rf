@@ -211,7 +211,7 @@ int drf_receiver_slots(const char *path, struct drf_snapshot *out) {
         return r;
 
     if (!r)
-        r = drf_read_snapshot(exchange, &session, out);
+        r = drf_read_snapshot(session.pid, exchange, &session, out);
 
     close(session.fd);
     return r;
@@ -226,7 +226,7 @@ int drf_receiver_batteries(const char *path, struct drf_battery_snapshot *out) {
     if (r)
         return r;
 
-    r = drf_read_batteries(exchange, &session, out);
+    r = drf_read_batteries(session.pid, exchange, &session, out);
 
     close(session.fd);
     return r;
@@ -249,11 +249,10 @@ int drf_receiver_unpair(const char *path, unsigned int slot,
     if (r)
         return r;
 
-    struct drf_action_io io = {
-        .context = &session,
-        .receiver_pid = session.pid,
-        .exchange = exchange,
-        .wait_ms = wait_ms};
+    struct drf_action_io io = {.context = &session,
+                               .receiver_pid = session.pid,
+                               .exchange = exchange,
+                               .wait_ms = wait_ms};
     r = drf_unpair(&io, slot, callbacks, result);
 
     close(session.fd);

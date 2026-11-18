@@ -36,7 +36,8 @@ static void test_fixture_queries(void) {
                           sizeof(request)) == 0);
 
             struct drf_slot decoded;
-            assert(drf_decode_slot(fixture->slot_responses[slot - 1],
+            assert(drf_decode_slot(DELL_PID_UNIVERSAL_4503,
+                                   fixture->slot_responses[slot - 1],
                                    DRF_REPORT_SIZE, slot, &decoded) == 0);
             assert(decoded.number == slot);
             if (decoded.kind == DRF_SLOT_KEYBOARD) {
@@ -133,22 +134,27 @@ static void test_invalid_reports(void) {
     assert(count == 99);
 
     memcpy(report, fixture_states[0].slot_responses[0], sizeof(report));
-    assert(drf_decode_slot(report, sizeof(report), 2, &slot) == -EBADMSG);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_4503, report, sizeof(report), 2,
+                           &slot) == -EBADMSG);
 
     report[3] = 0x7f;
-    assert(drf_decode_slot(report, sizeof(report), 1, &slot) == -EBADMSG);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_4503, report, sizeof(report), 1,
+                           &slot) == -EBADMSG);
 
     report[3] = DRF_SLOT_KEYBOARD;
     report[8] = 0x1b;
-    assert(drf_decode_slot(report, sizeof(report), 1, &slot) == -EBADMSG);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_4503, report, sizeof(report), 1,
+                           &slot) == -EBADMSG);
 
     report[8] = 'K';
     report[27] = 'X'; /* Garbage after the model terminator. */
-    assert(drf_decode_slot(report, sizeof(report), 1, &slot) == -EBADMSG);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_4503, report, sizeof(report), 1,
+                           &slot) == -EBADMSG);
 
     memcpy(report, fixture_states[0].slot_responses[2], sizeof(report));
     report[10] = 0;
-    assert(drf_decode_slot(report, sizeof(report), 3, &slot) == -EBADMSG);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_4503, report, sizeof(report), 3,
+                           &slot) == -EBADMSG);
 
     memcpy(report, fixture_metadata_response, sizeof(report));
     report[6] = '\n';
@@ -157,34 +163,41 @@ static void test_invalid_reports(void) {
 
 static void test_301c_slots(void) {
     struct drf_slot slot;
-    assert(drf_decode_slot(fixture_301c_occupied_slot, DRF_REPORT_SIZE, 1,
-                           &slot) == 0);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_301C, fixture_301c_occupied_slot,
+                           DRF_REPORT_SIZE, 1, &slot) == 0);
     assert(slot.number == 1 && slot.kind == DRF_SLOT_MOUSE);
     assert(strcmp(slot.model, "MS5320W") == 0);
     const uint8_t expected_id[3] = {0x2e, 0x84, 0xfa};
     assert(memcmp(slot.opaque_id, expected_id, sizeof(expected_id)) == 0);
 
-    assert(drf_decode_slot(fixture_301c_empty_slot, DRF_REPORT_SIZE, 2,
-                           &slot) == 0);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_301C, fixture_301c_empty_slot,
+                           DRF_REPORT_SIZE, 2, &slot) == 0);
     assert(slot.number == 2 && slot.kind == DRF_SLOT_EMPTY);
-    assert(drf_decode_slot(fixture_301c_stale_empty_slot, DRF_REPORT_SIZE, 6,
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_301C,
+                           fixture_301c_stale_empty_slot, DRF_REPORT_SIZE, 6,
                            &slot) == 0);
     assert(slot.number == 6 && slot.kind == DRF_SLOT_EMPTY);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_4503, fixture_301c_empty_slot,
+                           DRF_REPORT_SIZE, 2, &slot) == -EBADMSG);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_4503,
+                           fixture_301c_stale_empty_slot, DRF_REPORT_SIZE, 6,
+                           &slot) == -EBADMSG);
 
     uint8_t malformed[DRF_REPORT_SIZE];
     memcpy(malformed, fixture_301c_stale_empty_slot, sizeof(malformed));
     malformed[3] = DRF_SLOT_MOUSE;
-    assert(drf_decode_slot(malformed, sizeof(malformed), 6, &slot) ==
-           -EBADMSG);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_301C, malformed,
+                           sizeof(malformed), 6, &slot) == -EBADMSG);
     memcpy(malformed, fixture_301c_stale_empty_slot, sizeof(malformed));
     malformed[5] = 1;
-    assert(drf_decode_slot(malformed, sizeof(malformed), 6, &slot) ==
-           -EBADMSG);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_301C, malformed,
+                           sizeof(malformed), 6, &slot) == -EBADMSG);
     memcpy(malformed, fixture_301c_stale_empty_slot, sizeof(malformed));
     malformed[31] = 1;
-    assert(drf_decode_slot(malformed, sizeof(malformed), 6, &slot) ==
-           -EBADMSG);
-    assert(drf_decode_slot(fixture_301c_stale_empty_slot, DRF_REPORT_SIZE, 5,
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_301C, malformed,
+                           sizeof(malformed), 6, &slot) == -EBADMSG);
+    assert(drf_decode_slot(DELL_PID_UNIVERSAL_301C,
+                           fixture_301c_stale_empty_slot, DRF_REPORT_SIZE, 5,
                            &slot) == -EBADMSG);
 
     unsigned int percentage = 0;
@@ -203,13 +216,14 @@ static void test_fingerprint(void) {
         drf_query_device_matches(&device, fixture_management_descriptor, 47));
 
     device.pid = DELL_PID_UNIVERSAL_301C;
-    assert(drf_query_device_matches(&device, fixture_301c_management_descriptor,
-                                    sizeof(fixture_301c_management_descriptor)));
+    assert(
+        drf_query_device_matches(&device, fixture_301c_management_descriptor,
+                                 sizeof(fixture_301c_management_descriptor)));
     assert(
         !drf_query_device_matches(&device, fixture_management_descriptor, 47));
-    assert(!drf_query_device_matches(&device, fixture_301c_management_descriptor,
-                                     sizeof(fixture_301c_management_descriptor) -
-                                         1));
+    assert(!drf_query_device_matches(
+        &device, fixture_301c_management_descriptor,
+        sizeof(fixture_301c_management_descriptor) - 1));
     for (size_t i = 0; i < sizeof(fixture_301c_management_descriptor); i++) {
         uint8_t descriptor[sizeof(fixture_301c_management_descriptor)];
         memcpy(descriptor, fixture_301c_management_descriptor,
@@ -293,7 +307,8 @@ static void test_snapshot(void) {
          i++) {
         struct replay replay = {.fixture = &fixture_states[i]};
         struct drf_snapshot snapshot;
-        assert(drf_read_snapshot(exchange, &replay, &snapshot) == 0);
+        assert(drf_read_snapshot(DELL_PID_UNIVERSAL_4503, exchange, &replay,
+                                 &snapshot) == 0);
         assert(replay.step == 9);
         assert(snapshot.paired_count == replay.fixture->count);
         assert(strcmp(snapshot.receiver.name, "Dell Universal Receiver") == 0);
@@ -309,8 +324,8 @@ static void test_snapshot(void) {
            DRF_REPORT_SIZE);
     struct replay empty_301c_replay = {.fixture = &empty_301c};
     struct drf_snapshot empty_301c_snapshot;
-    assert(drf_read_snapshot(exchange, &empty_301c_replay,
-                             &empty_301c_snapshot) == 0);
+    assert(drf_read_snapshot(DELL_PID_UNIVERSAL_301C, exchange,
+                             &empty_301c_replay, &empty_301c_snapshot) == 0);
     assert(empty_301c_snapshot.paired_count == 0);
     for (size_t i = 0; i < DRF_SLOT_COUNT; i++)
         assert(empty_301c_snapshot.slots[i].kind == DRF_SLOT_EMPTY);
@@ -319,18 +334,21 @@ static void test_snapshot(void) {
     memset(&original, 0x55, sizeof(original));
     snapshot = original;
     struct replay replay = {.fixture = &fixture_states[0], .short_reply = 1};
-    assert(drf_read_snapshot(exchange, &replay, &snapshot) == -EMSGSIZE);
+    assert(drf_read_snapshot(DELL_PID_UNIVERSAL_4503, exchange, &replay,
+                             &snapshot) == -EMSGSIZE);
     assert(memcmp(&snapshot, &original, sizeof(snapshot)) == 0);
 
     for (unsigned int step = 1; step <= 9; step++) {
         replay =
             (struct replay){.fixture = &fixture_states[0], .fail_step = step};
-        assert(drf_read_snapshot(exchange, &replay, &snapshot) == -ETIMEDOUT);
+        assert(drf_read_snapshot(DELL_PID_UNIVERSAL_4503, exchange, &replay,
+                                 &snapshot) == -ETIMEDOUT);
         assert(memcmp(&snapshot, &original, sizeof(snapshot)) == 0);
     }
 
     replay = (struct replay){.fixture = &fixture_states[0], .change_count = 1};
-    assert(drf_read_snapshot(exchange, &replay, &snapshot) == -EAGAIN);
+    assert(drf_read_snapshot(DELL_PID_UNIVERSAL_4503, exchange, &replay,
+                             &snapshot) == -EAGAIN);
     assert(memcmp(&snapshot, &original, sizeof(snapshot)) == 0);
 }
 
@@ -363,7 +381,8 @@ static void test_battery_snapshot(void) {
         .snapshot = {.fixture = &fixture_states[0]},
     };
     struct drf_battery_snapshot result;
-    assert(drf_read_batteries(battery_exchange, &replay, &result) == 0);
+    assert(drf_read_batteries(DELL_PID_UNIVERSAL_4503, battery_exchange,
+                              &replay, &result) == 0);
     assert(replay.snapshot.step == 9);
     assert(replay.battery_step == 2);
     assert(result.percentages[0] == 73);
@@ -371,12 +390,21 @@ static void test_battery_snapshot(void) {
     for (size_t i = 2; i < DRF_SLOT_COUNT; i++)
         assert(result.percentages[i] == DRF_BATTERY_UNKNOWN);
 
+    struct fixture_state unknown_ids = fixture_states[0];
+    memset(unknown_ids.slot_responses[0] + 5, 0, 3);
+    memset(unknown_ids.slot_responses[1] + 5, 0xff, 3);
+    replay = (struct battery_replay){.snapshot = {.fixture = &unknown_ids}};
+    assert(drf_read_batteries(DELL_PID_UNIVERSAL_4503, battery_exchange,
+                              &replay, &result) == 0);
+    assert(result.snapshot.paired_count == 2 && replay.battery_step == 2);
+
     struct fixture_state no_mouse_battery = fixture_states[0];
     no_mouse_battery.slot_responses[1][30] &= (uint8_t)~DRF_CAP_BATTERY;
     replay = (struct battery_replay){
         .snapshot = {.fixture = &no_mouse_battery},
     };
-    assert(drf_read_batteries(battery_exchange, &replay, &result) == 0);
+    assert(drf_read_batteries(DELL_PID_UNIVERSAL_4503, battery_exchange,
+                              &replay, &result) == 0);
     assert(replay.battery_step == 1);
     assert(!(result.snapshot.slots[1].capabilities & DRF_CAP_BATTERY));
     assert(result.percentages[1] == DRF_BATTERY_UNKNOWN);
@@ -384,7 +412,8 @@ static void test_battery_snapshot(void) {
     replay = (struct battery_replay){
         .snapshot = {.fixture = &fixture_states[2]},
     };
-    assert(drf_read_batteries(battery_exchange, &replay, &result) == 0);
+    assert(drf_read_batteries(DELL_PID_UNIVERSAL_4503, battery_exchange,
+                              &replay, &result) == 0);
     assert(replay.battery_step == 0);
 
     struct drf_battery_snapshot original;
@@ -392,7 +421,8 @@ static void test_battery_snapshot(void) {
     result = original;
     replay = (struct battery_replay){
         .snapshot = {.fixture = &fixture_states[0]}, .malformed = 1};
-    assert(drf_read_batteries(battery_exchange, &replay, &result) == -EBADMSG);
+    assert(drf_read_batteries(DELL_PID_UNIVERSAL_4503, battery_exchange,
+                              &replay, &result) == -EBADMSG);
     assert(memcmp(&result, &original, sizeof(result)) == 0);
 }
 
