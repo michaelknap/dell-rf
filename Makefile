@@ -48,12 +48,14 @@ build/dell-rf: $(OBJ)
 	$(CC) $(CFLAGS) $(DRF_CFLAGS) $(OBJ) $(LDFLAGS) $(DRF_LDFLAGS) \
 		-o $@
 
-build/test_protocol: tests/test_protocol.c tests/fixtures/4503_queries.h \
+build/test_protocol: tests/test_protocol.c tests/fixtures/301c_queries.h \
+                    tests/fixtures/4503_queries.h \
                     build/test/protocol.o include/dell_rf_protocol.h | build
 	$(CC) $(CPPFLAGS) $(DRF_CPPFLAGS) $(TEST_CFLAGS) \
 		tests/test_protocol.c build/test/protocol.o $(TEST_LDFLAGS) -o $@
 
-build/test_actions: tests/test_actions.c tests/fixtures/4503_actions.h \
+build/test_actions: tests/test_actions.c tests/fixtures/301c_queries.h \
+                    tests/fixtures/4503_actions.h \
                     tests/fixtures/4503_queries.h build/test/actions.o \
                     build/test/protocol.o include/dell_rf_actions.h | build
 	$(CC) $(CPPFLAGS) $(DRF_CPPFLAGS) $(TEST_CFLAGS) \
@@ -77,7 +79,8 @@ build/dell-rf-cli-test: tests/cli_mock.c tests/fixtures/4503_actions.h \
 		-Wl,--wrap=drf_receiver_pair \
 		-Wl,--wrap=drf_receiver_unpair,--wrap=drf_receiver_batteries -o $@
 
-build/test_receiver: tests/test_receiver.c tests/fixtures/4503_queries.h \
+build/test_receiver: tests/test_receiver.c tests/fixtures/301c_queries.h \
+                     tests/fixtures/4503_queries.h \
                      tests/fixtures/4503_actions.h \
                      build/test/receiver.o build/test/protocol.o build/test/actions.o \
                      include/dell_rf_protocol.h | build

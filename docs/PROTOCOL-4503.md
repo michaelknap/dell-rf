@@ -1,9 +1,10 @@
 # Receiver protocol
 
 These notes describe the protocol reverse-engineered from USB captures of Dell
-Peripheral Manager on a `413c:4503` receiver using HID interface 2. The program
-checks its report descriptor before sending commands. USB release does not
-restrict access.
+Peripheral Manager on a `413c:4503` receiver using HID interface 2, with
+additional observations from a `413c:301c` receiver. The program checks the
+exact report descriptor for each product before sending commands. USB release
+does not restrict access.
 
 Slot queries, pairing and removal have been tested on releases `0240` and
 `0244`; other revisions remain unverified. Battery readings have been tested on
@@ -27,9 +28,26 @@ are padded with zeros. Values below are hexadecimal; slot numbers are 1-6.
 | `08 04 01 <identifier[3]>` | Select a discovered device |
 | `08 05` | Poll pairing completion |
 
-Query replies echo the command. Discovery begins with an `08 00` reply.
+Query replies echo the command. Discovery begins with an `08 00` reply on
+`4503`; the observed `301c` reply is `08 0b` followed by zero padding.
 Discovery and selection acknowledgements use `00` or `01`; their meaning is
 unassigned. Removal acknowledges with `08 06` and zero padding.
+
+The observed `301c` selection response echoes the complete request, including
+the selected peripheral identifier. The implementation requires the echoed ID
+to match before accepting this response as an acknowledgement.
+
+During a successful `301c` pairing, interrupt endpoint `83` produced
+`01 08 01 30` followed by zero padding after selection. Its individual fields
+remain uninterpreted. After this notification, pairing status returned the
+completed device record and readback showed the new occupied slot.
+
+Discovery, interactive approval and completion use separate bounded time
+windows. Finding a peripheral near the discovery deadline therefore does not
+consume the time required for selection and RF negotiation.
+
+Battery query `08 10 01` returned `30` (48 percent) for the paired MS5320W on
+the tested `301c` receiver.
 
 ## Slot records
 
@@ -51,6 +69,11 @@ With some devices paired, an empty record echoes the slot, has `ff` at offsets
 3-29, and zeros at 30-31. When the receiver is empty, offsets 2-31 are all zero.
 Count replies store the count at offset 2. Receiver information stores four
 unassigned bytes at 2-5 and the receiver name at 6-29.
+
+The `301c` also echoes the requested slot for an empty record. After removal it
+may retain old model metadata at offsets 8-29; type, opaque attribute and ID at
+3-7, and bytes 30-31, remain zero. The paired-device count and occupied records
+are still checked for consistency before publishing a snapshot.
 
 ## Battery reports
 

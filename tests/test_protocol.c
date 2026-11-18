@@ -1,4 +1,5 @@
 #include "dell_rf_protocol.h"
+#include "fixtures/301c_queries.h"
 #include "fixtures/4503_queries.h"
 
 #include <assert.h>
@@ -154,6 +155,44 @@ static void test_invalid_reports(void) {
     assert(drf_decode_receiver(report, sizeof(report), &metadata) == -EBADMSG);
 }
 
+static void test_301c_slots(void) {
+    struct drf_slot slot;
+    assert(drf_decode_slot(fixture_301c_occupied_slot, DRF_REPORT_SIZE, 1,
+                           &slot) == 0);
+    assert(slot.number == 1 && slot.kind == DRF_SLOT_MOUSE);
+    assert(strcmp(slot.model, "MS5320W") == 0);
+    const uint8_t expected_id[3] = {0x2e, 0x84, 0xfa};
+    assert(memcmp(slot.opaque_id, expected_id, sizeof(expected_id)) == 0);
+
+    assert(drf_decode_slot(fixture_301c_empty_slot, DRF_REPORT_SIZE, 2,
+                           &slot) == 0);
+    assert(slot.number == 2 && slot.kind == DRF_SLOT_EMPTY);
+    assert(drf_decode_slot(fixture_301c_stale_empty_slot, DRF_REPORT_SIZE, 6,
+                           &slot) == 0);
+    assert(slot.number == 6 && slot.kind == DRF_SLOT_EMPTY);
+
+    uint8_t malformed[DRF_REPORT_SIZE];
+    memcpy(malformed, fixture_301c_stale_empty_slot, sizeof(malformed));
+    malformed[3] = DRF_SLOT_MOUSE;
+    assert(drf_decode_slot(malformed, sizeof(malformed), 6, &slot) ==
+           -EBADMSG);
+    memcpy(malformed, fixture_301c_stale_empty_slot, sizeof(malformed));
+    malformed[5] = 1;
+    assert(drf_decode_slot(malformed, sizeof(malformed), 6, &slot) ==
+           -EBADMSG);
+    memcpy(malformed, fixture_301c_stale_empty_slot, sizeof(malformed));
+    malformed[31] = 1;
+    assert(drf_decode_slot(malformed, sizeof(malformed), 6, &slot) ==
+           -EBADMSG);
+    assert(drf_decode_slot(fixture_301c_stale_empty_slot, DRF_REPORT_SIZE, 5,
+                           &slot) == -EBADMSG);
+
+    unsigned int percentage = 0;
+    assert(drf_decode_battery(fixture_301c_ms5320w_battery, DRF_REPORT_SIZE, 1,
+                              &percentage) == 0);
+    assert(percentage == 48);
+}
+
 static void test_fingerprint(void) {
     struct drf_device device = {.bus = BUS_USB,
                                 .vid = DELL_VID,
@@ -163,9 +202,22 @@ static void test_fingerprint(void) {
     assert(
         drf_query_device_matches(&device, fixture_management_descriptor, 47));
 
-    device.pid = 0x301c;
+    device.pid = DELL_PID_UNIVERSAL_301C;
+    assert(drf_query_device_matches(&device, fixture_301c_management_descriptor,
+                                    sizeof(fixture_301c_management_descriptor)));
     assert(
         !drf_query_device_matches(&device, fixture_management_descriptor, 47));
+    assert(!drf_query_device_matches(&device, fixture_301c_management_descriptor,
+                                     sizeof(fixture_301c_management_descriptor) -
+                                         1));
+    for (size_t i = 0; i < sizeof(fixture_301c_management_descriptor); i++) {
+        uint8_t descriptor[sizeof(fixture_301c_management_descriptor)];
+        memcpy(descriptor, fixture_301c_management_descriptor,
+               sizeof(descriptor));
+        descriptor[i] ^= 1;
+        assert(
+            !drf_query_device_matches(&device, descriptor, sizeof(descriptor)));
+    }
 
     device.pid = 0x8505;
     assert(
@@ -246,6 +298,22 @@ static void test_snapshot(void) {
         assert(snapshot.paired_count == replay.fixture->count);
         assert(strcmp(snapshot.receiver.name, "Dell Universal Receiver") == 0);
     }
+
+    struct fixture_state empty_301c = fixture_states[2];
+    for (size_t i = 0; i < DRF_SLOT_COUNT; i++) {
+        memcpy(empty_301c.slot_responses[i], fixture_301c_empty_slot,
+               DRF_REPORT_SIZE);
+        empty_301c.slot_responses[i][2] = (uint8_t)(i + 1);
+    }
+    memcpy(empty_301c.slot_responses[5], fixture_301c_stale_empty_slot,
+           DRF_REPORT_SIZE);
+    struct replay empty_301c_replay = {.fixture = &empty_301c};
+    struct drf_snapshot empty_301c_snapshot;
+    assert(drf_read_snapshot(exchange, &empty_301c_replay,
+                             &empty_301c_snapshot) == 0);
+    assert(empty_301c_snapshot.paired_count == 0);
+    for (size_t i = 0; i < DRF_SLOT_COUNT; i++)
+        assert(empty_301c_snapshot.slots[i].kind == DRF_SLOT_EMPTY);
 
     struct drf_snapshot snapshot, original;
     memset(&original, 0x55, sizeof(original));
@@ -332,6 +400,7 @@ int main(void) {
     test_fixture_queries();
     test_battery_codec();
     test_invalid_reports();
+    test_301c_slots();
     test_fingerprint();
     test_snapshot();
     test_battery_snapshot();

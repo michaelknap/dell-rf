@@ -13,13 +13,17 @@
 #include <unistd.h>
 
 int drf_is_supported_id(uint16_t vid, uint16_t pid) {
-    return vid == DELL_VID && pid == DELL_PID_UNIVERSAL_4503;
+    return vid == DELL_VID &&
+           (pid == DELL_PID_UNIVERSAL_4503 ||
+            pid == DELL_PID_UNIVERSAL_301C);
 }
 
 const char *drf_product_label(uint16_t pid) {
     switch (pid) {
     case DELL_PID_UNIVERSAL_4503:
         return "Dell Universal Receiver (4503)";
+    case DELL_PID_UNIVERSAL_301C:
+        return "Dell Universal Receiver (301c)";
     default:
         return "Unknown HID";
     }

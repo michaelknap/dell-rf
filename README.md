@@ -15,7 +15,8 @@ complete with telemetry and assorted other baggage.
 
 ## Hardware compatibility
 
-Other peripherals and `413c:4503` receiver revisions may work but are unverified; please [report compatibility results](https://github.com/michaelknap/dell-rf/issues/new).
+Other peripherals and receiver revisions may work but are unverified; please
+[report compatibility results](https://github.com/michaelknap/dell-rf/issues/new).
 
 ### Receivers
 
@@ -23,6 +24,15 @@ Other peripherals and `413c:4503` receiver revisions may work but are unverified
 | --- | --- | --- |
 | Dell Universal Receiver | `413c:4503` | `0240` |
 | Dell Universal Receiver | `413c:4503` | `0244` |
+| Dell Universal Receiver | `413c:301c` | `0244` <sup>[status](#receiver-301c-status)</sup> |
+
+#### Receiver 301c status
+
+Receiver discovery, metadata and slot queries, and removal have been exercised
+on `413c:301c`, release `0244`. Pairing an MS5320W, including asynchronous
+discovery and completion notifications, final slot readback, persistence after
+receiver reconnect and battery reporting is confirmed. Mouse input was tested
+on Fedora Linux and, after moving the paired receiver, on macOS.
 
 ### Peripherals
 

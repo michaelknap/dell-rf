@@ -88,6 +88,9 @@ int drf_encode_pair_command(enum drf_pair_command command,
 int drf_decode_pair_ack(enum drf_pair_command command, const uint8_t *report,
                         size_t length);
 
+int drf_decode_pair_ack_for_pid(enum drf_pair_command command, uint16_t pid,
+                                const uint8_t *report, size_t length);
+
 /* -ENOMSG means an unrelated input report; -EAGAIN means pairing is pending. */
 int drf_decode_candidate(const uint8_t *report, size_t length,
                          struct drf_slot *out);

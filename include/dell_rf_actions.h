@@ -31,6 +31,7 @@ struct drf_action_result {
 /* Injectable hardware and clock boundary for transaction replay tests. */
 struct drf_action_io {
     void *context;
+    uint16_t receiver_pid;
     drf_exchange_fn exchange;
     int (*wait_ms)(void *context, unsigned int milliseconds);
     int (*now_ms)(void *context, uint64_t *milliseconds);

@@ -177,6 +177,19 @@ static int check_window(const struct drf_action_io *io,
     return *now >= deadline ? -ETIMEDOUT : 0;
 }
 
+static int start_window(const struct drf_action_io *io,
+                        unsigned int timeout_ms, uint64_t *deadline) {
+    uint64_t now;
+    int r = io->now_ms(io->context, &now);
+    if (r)
+        return r;
+    if (now > UINT64_MAX - timeout_ms)
+        return -EOVERFLOW;
+
+    *deadline = now + timeout_ms;
+    return 0;
+}
+
 static unsigned int poll_interval(uint64_t remaining) {
     return remaining < 1000 ? (unsigned int)remaining : 1000;
 }
@@ -311,11 +324,23 @@ static int finish_pair(const struct drf_action_io *io,
         if (r)
             break;
 
-        r = io->wait_ms(io->context, poll_interval(deadline - now));
-        if (r == -EINTR)
-            continue;
-        if (r)
-            break;
+        unsigned int interval = poll_interval(deadline - now);
+        if (io->receiver_pid == DELL_PID_UNIVERSAL_301C) {
+            /* The 301c delivers a completion notification through the input
+             * endpoint after selection. Consume it before polling status;
+             * decoded status and final readback remain authoritative. */
+            uint8_t input[DRF_REPORT_SIZE + 1];
+            size_t input_length = sizeof(input);
+            r = io->receive(io->context, input, &input_length, interval);
+            if (r && r != -EAGAIN && r != -ETIMEDOUT && r != -EINTR)
+                break;
+        } else {
+            r = io->wait_ms(io->context, interval);
+            if (r == -EINTR)
+                continue;
+            if (r)
+                break;
+        }
 
         r = check_window(io, callbacks, deadline, &now);
         if (r)
@@ -387,19 +412,17 @@ int drf_pair(const struct drf_action_io *io, enum drf_slot_kind kind,
             return r;
     }
 
-    uint64_t now;
-    r = io->now_ms(io->context, &now);
+    uint64_t deadline;
+    r = start_window(io, timeout_ms, &deadline);
     if (r)
         return r;
-    if (now > UINT64_MAX - timeout_ms)
-        return -EOVERFLOW;
-    uint64_t deadline = now + timeout_ms;
 
     uint8_t response[DRF_REPORT_SIZE];
     size_t length;
     r = pair_exchange(io, DRF_PAIR_BEGIN, NULL, response, &length);
     if (!r)
-        r = drf_decode_pair_ack(DRF_PAIR_BEGIN, response, length);
+        r = drf_decode_pair_ack_for_pid(DRF_PAIR_BEGIN, io->receiver_pid,
+                                        response, length);
     if (r)
         return r;
     if (callbacks->search_started)
@@ -408,6 +431,14 @@ int drf_pair(const struct drf_action_io *io, enum drf_slot_kind kind,
     r = find_candidate(io, kind, &before, callbacks, deadline, &result->device);
     if (r)
         return r;
+    /* Discovery, approval and final RF negotiation are separate phases. A
+     * device found near the end of the search window must still receive a
+     * complete approval and completion window. */
+    r = start_window(io, timeout_ms, &deadline);
+    if (r)
+        return r;
+
+    uint64_t now;
     r = check_window(io, callbacks, deadline, &now);
     if (r)
         return r;
@@ -433,8 +464,22 @@ int drf_pair(const struct drf_action_io *io, enum drf_slot_kind kind,
     r = pair_exchange(io, DRF_PAIR_SELECT, result->device.opaque_id, response,
                       &length);
     if (!r)
-        r = drf_decode_pair_ack(DRF_PAIR_SELECT, response, length);
+        r = drf_decode_pair_ack_for_pid(DRF_PAIR_SELECT, io->receiver_pid,
+                                        response, length);
+    if (!r && io->receiver_pid == DELL_PID_UNIVERSAL_301C &&
+        response[2] == 1 &&
+        memcmp(response + 3, result->device.opaque_id,
+               sizeof(result->device.opaque_id)) != 0)
+        r = -EBADMSG;
     result->acknowledgement_error = r;
+
+    r = start_window(io, timeout_ms, &deadline);
+    if (r) {
+        /* Selection is already a commit point. A clock failure must not skip
+         * the same read-only verification used for status/timeout failures. */
+        int verify_error = verify_pair(io, &before, result);
+        return verify_error ? r : 0;
+    }
 
     return finish_pair(io, &before, callbacks, deadline, result);
 }
