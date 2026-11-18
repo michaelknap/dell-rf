@@ -44,15 +44,15 @@ receiver protocol.
 ### Arch Linux
 
 ```sh
-curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.1.0/dell-rf-1.1.0-1-x86_64.pkg.tar.zst &&
-sudo pacman -U ./dell-rf-1.1.0-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.2.0/dell-rf-1.2.0-1-x86_64.pkg.tar.zst &&
+sudo pacman -U ./dell-rf-1.2.0-1-x86_64.pkg.tar.zst
 ```
 
 ### Debian / Ubuntu
 
 ```sh
-curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.1.0/dell-rf_1.1.0-1_amd64.deb &&
-sudo apt install ./dell-rf_1.1.0-1_amd64.deb
+curl -fLO https://github.com/michaelknap/dell-rf/releases/download/v1.2.0/dell-rf_1.2.0-1_amd64.deb &&
+sudo apt install ./dell-rf_1.2.0-1_amd64.deb
 ```
 
 Packages are for x86_64/amd64, with Debian 12+ and Ubuntu 22.04+ supported.

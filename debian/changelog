@@ -1,3 +1,11 @@
+dell-rf (1.2.0-1) unstable; urgency=medium
+
+  * Add support for the Dell Universal Receiver 413c:301c.
+  * Give discovery, confirmation and pairing completion 30 seconds each.
+  * Restrict the udev access rule to the receiver management interface.
+
+ -- Michael Knap <ping@mknap.com>  Wed, 18 Nov 2026 21:52:10 +0000
+
 dell-rf (1.1.0-1) unstable; urgency=medium
 
   * Add the battery command for paired peripherals that advertise battery
